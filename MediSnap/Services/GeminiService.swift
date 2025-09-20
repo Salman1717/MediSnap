@@ -16,63 +16,84 @@ final class GeminiService {
     private var model: GenerativeModel?
     
     private init() {
-        
         self.ai = FirebaseAI.firebaseAI(backend: .googleAI())
-        
         let modelName = "gemini-2.5-pro"
         self.model = ai.generativeModel(modelName: modelName)
     }
     
     // MARK: - Extract Medications
-        /// Accepts prescriptionText (OCR output or plain text) and returns decoded Medication array.
-        func extractMeds(from prescriptionText: String) async throws -> [Medication] {
-            let systemPrompt = """
-            You are a JSON extractor. From the prescription text below, return a JSON array of medication objects.
-            Each medication object must have these fields:
-            name (string), dosage (string or empty), frequency (string or empty), duration (string or empty),
-            route (string or empty), originalText (string), confidence (number 0.0-1.0), uncertain (boolean).
-            Return JSON only (no commentary).
-            """
+    func extractMedsAndDate(from prescriptionText: String) async throws -> (medications: [Medication], date: String?) {
+        let systemPrompt = """
+            You are a JSON extractor. From the prescription text below, return a JSON object with:
+            1) medications: a JSON array of medication objects with fields:
+               name (string), dosage (string or empty), frequency (string or empty), duration (string or empty),
+               route (string or empty), originalText (string), confidence (number 0.0-1.0), uncertain (boolean).
+            2) date: prescription date in YYYY-MM-DD format if available, else null.
+            Return JSON only.
+        """
 
-            let prompt = """
-            \(systemPrompt)
+        let prompt = "\(systemPrompt)\n\nPrescription text:\n\(prescriptionText)"
 
-            Prescription text:
-            \(prescriptionText)
-            """
+        let response = try await model?.generateContent(prompt)
+        let text = response?.text ?? ""
 
-            let response = try await model?.generateContent(prompt)
-
-            guard let text = response?.text else {
-                throw NSError(domain: "GeminiService", code: 1,
-                              userInfo: [NSLocalizedDescriptionKey: "No textual response from model"])
-            }
-            print("Raw text: \(text)")
-            // Try extracting first JSON substring (tolerant parsing)
-            if let jsonData = firstJSONData(from: text) {
-                do {
-                    let meds = try JSONDecoder().decode([Medication].self, from: jsonData)
-                    return meds
-                } catch {
-                    // Provide debug info in error message to help iterate on prompt
-                    throw NSError(domain: "GeminiService", code: 2, userInfo: [
-                        NSLocalizedDescriptionKey: "Failed to decode medications JSON: \(error.localizedDescription)",
-                        "modelResponsePreview": String(text.prefix(500))
-                    ])
-                }
-            } else {
-                throw NSError(domain: "GeminiService", code: 3, userInfo: [
-                    NSLocalizedDescriptionKey: "Model output did not contain JSON. Response preview: \(String(text.prefix(500)))"
-                ])
-            }
+        guard let jsonData = firstJSONData(from: text) else {
+            throw NSError(domain: "GeminiService", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "Model output did not contain valid JSON. Response preview: \(String(text.prefix(500)))"
+            ])
         }
+
+        // Decode JSON object
+        struct Response: Codable {
+            var medications: [Medication]
+            var date: String?
+        }
+
+        let decoded = try JSONDecoder().decode(Response.self, from: jsonData)
+        return (decoded.medications, decoded.date)
+    }
 
     
     private func firstJSONData(from text: String) -> Data? {
-            guard let start = text.firstIndex(where: { $0 == "{" || $0 == "[" }) else { return nil }
-            guard let end = text.lastIndex(where: { $0 == "}" || $0 == "]" }) else { return nil }
-            guard start < end else { return nil }
-            let substring = text[start...end]
-            return Data(substring.utf8)
+        print("=== SEARCHING FOR JSON IN TEXT ===")
+        print("Full response text:")
+        print(text)
+        print("========================")
+        
+        // Look for object start
+        guard let objectStart = text.firstIndex(of: "{") else {
+            print("❌ No '{' found in text")
+            return nil
         }
+        
+        // Find the matching closing brace by counting braces
+        var braceCount = 0
+        var objectEnd: String.Index?
+        
+        for index in text[objectStart...].indices {
+            let char = text[index]
+            if char == "{" {
+                braceCount += 1
+            } else if char == "}" {
+                braceCount -= 1
+                if braceCount == 0 {
+                    objectEnd = index
+                    break
+                }
+            }
+        }
+        
+        guard let end = objectEnd else {
+            print("❌ No matching '}' found")
+            return nil
+        }
+        
+        let jsonSubstring = text[objectStart...end]
+        print("=== FOUND JSON SUBSTRING ===")
+        print(jsonSubstring)
+        print("============================")
+        
+        let cleaned = jsonSubstring.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.data(using: .utf8)
+    }
 }
