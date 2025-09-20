@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import FirebaseFirestore
+import Combine
 
 @MainActor
 class PrescriptionHistoryViewModel: ObservableObject {
