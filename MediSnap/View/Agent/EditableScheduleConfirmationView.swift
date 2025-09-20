@@ -103,6 +103,20 @@ struct EditableScheduleConfirmationView: View {
                         }
                         .buttonStyle(.bordered)
                         .disabled(isAddingToCalendar)
+                        
+                        // ✅ Add Safety Information Button
+                        Button(action: {
+                            vm.showMedicationSafetyInfo()
+                        }) {
+                            HStack {
+                                Image(systemName: "cross.circle.fill")
+                                Text("View Safety Information")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.bordered)
+                        .foregroundColor(.orange)
                     }
                     .padding()
                     .background(Color(.systemGroupedBackground))
@@ -134,9 +148,15 @@ struct EditableScheduleConfirmationView: View {
             Text("Your medication schedule has been saved successfully.")
         }
         .alert("Added to Calendar!", isPresented: $showCalendarSuccessAlert) {
-            Button("OK") { }
+            Button("View Safety Information") {
+                vm.showSafetyInformation = true
+            }
+            Button("Done") { }
         } message: {
-            Text("Your medication reminders have been added to Google Calendar successfully.")
+            Text("Your medication reminders have been added to Google Calendar successfully. Would you like to view important safety information about your medications?")
+        }
+        .sheet(isPresented: $vm.showSafetyInformation) {
+            MedicationSafetyView(medications: vm.medications)
         }
     }
 }

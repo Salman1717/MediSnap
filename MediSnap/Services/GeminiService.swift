@@ -10,13 +10,13 @@ import Foundation
 import Combine
 
 @MainActor
-final class GeminiService: ObservableObject {
+final class GeminiService : ObservableObject {
     static let shared = GeminiService()
     @Published var medicationSchedule: [MedicationSchedule] = []
 
     
     private let ai: FirebaseAI
-    private var model: GenerativeModel?
+    var model: GenerativeModel? // ✅ Make model accessible
     
     private init() {
         self.ai = FirebaseAI.firebaseAI(backend: .googleAI())
@@ -120,6 +120,63 @@ final class GeminiService: ObservableObject {
         }
 
         self.medicationSchedule = schedule
+    }
+
+    // MARK: - Get Safety Information
+    func getSafetyInformation(for medications: [Medication]) async throws -> SafetyResponse {
+        let medicationNames = medications.map { $0.name }.joined(separator: ", ")
+        
+        let systemPrompt = """
+        You are a medical safety information assistant. For the given medications, provide comprehensive safety information in JSON format.
+        
+        Return a JSON object with:
+        1) medications: array of medication safety objects with fields:
+           - medicationName (string)
+           - commonSideEffects (array of strings): mild, common side effects
+           - seriousSideEffects (array of strings): severe side effects requiring medical attention
+           - precautions (array of strings): important precautions and warnings
+           - foodInteractions (array of strings): foods to avoid or take with
+           - drugInteractions (array of strings): other medications that may interact
+           - contraindications (array of strings): conditions where medication shouldn't be used
+           - whenToSeekHelp (array of strings): symptoms requiring immediate medical attention
+           - generalAdvice (array of strings): general tips for safe use
+        
+        2) generalWarning (string): Important disclaimer about consulting healthcare providers
+        
+        Provide accurate, evidence-based information. Include disclaimer about consulting healthcare professionals.
+        Return only valid JSON.
+        """
+        
+        let prompt = """
+        \(systemPrompt)
+        
+        Medications to analyze:
+        \(medicationNames)
+        
+        Please provide comprehensive safety information for each medication.
+        """
+        
+        let response = try await model?.generateContent(prompt)
+        guard let text = response?.text else {
+            throw NSError(domain: "GeminiService", code: 5, userInfo: [
+                NSLocalizedDescriptionKey: "No response from AI model"
+            ])
+        }
+        
+        print("=== SAFETY INFO RESPONSE ===")
+        print(text)
+        print("============================")
+        
+        guard let jsonData = firstJSONData(from: text) else {
+            throw NSError(domain: "GeminiService", code: 6, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to extract JSON from AI response"
+            ])
+        }
+        
+        let decoder = JSONDecoder()
+        let safetyResponse = try decoder.decode(SafetyResponse.self, from: jsonData)
+        
+        return safetyResponse
     }
 
     
