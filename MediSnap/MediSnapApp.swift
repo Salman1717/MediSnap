@@ -25,10 +25,17 @@ struct MediSnapApp: App {
     var body: some Scene {
         
         WindowGroup {
-            if showAuthView{
-                AuthView(showAuthView: $showAuthView)
-            }else{
-                ContentView(showAuth: $showAuthView)
+            ZStack{
+                if showAuthView{
+                    AuthView(showAuthView: $showAuthView)
+                }else{
+                    ContentView(showAuth: $showAuthView)
+                    
+                }
+            }
+            .onAppear{
+                let authUser = try? AuthServices.shared.getAuthenticatedUser()
+                self.showAuthView = authUser == nil
             }
         }
     }

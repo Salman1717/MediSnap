@@ -15,32 +15,53 @@ struct GoogleSignInResultModel{
 }
 
 final class GoogleSignInHelper {
+    static let shared = GoogleSignInHelper()
+    private var currentUser: GIDGoogleUser?
     
     @MainActor
     func signIn() async throws -> GoogleSignInResultModel {
+        // Reuse current user if token is valid
+        if let user = currentUser,
+           let expiration = user.accessToken.expirationDate,
+           expiration.timeIntervalSinceNow > 60 {
+            guard let idToken = user.idToken?.tokenString else {
+                throw URLError(.badServerResponse)
+            }
+            return GoogleSignInResultModel(
+                idToken: idToken,
+                accessToken: user.accessToken.tokenString
+            )
+        }
+        
         guard let topVC = Utilities.shared.topViewController() else {
             throw URLError(.cannotFindHost)
         }
         
-        // Define Calendar scopes
-        let calendarScopes = [
-            "https://www.googleapis.com/auth/calendar" // Full calendar access
-        ]
+        let calendarScopes = ["https://www.googleapis.com/auth/calendar"]
         
-        // Sign in with additional scopes
-        let GIDSignInResult = try await GIDSignIn.sharedInstance.signIn(
-            withPresenting: topVC, hint: "",
+        let result = try await GIDSignIn.sharedInstance.signIn(
+            withPresenting: topVC,
+            hint: "",
             additionalScopes: calendarScopes
         )
         
-        // Extract ID and access tokens
-        guard let idToken = GIDSignInResult.user.idToken?.tokenString else {
+        currentUser = result.user
+        
+        guard let idToken = result.user.idToken?.tokenString else {
             throw URLError(.badServerResponse)
         }
         
-        let accessToken = GIDSignInResult.user.accessToken.tokenString
-        
-        return GoogleSignInResultModel(idToken: idToken, accessToken: accessToken)
+        return GoogleSignInResultModel(
+            idToken: idToken,
+            accessToken: result.user.accessToken.tokenString
+        )
+    }
+    
+    // ✅ Reset cached user on logout
+    func reset() {
+        currentUser = nil
     }
 }
+
+
 
