@@ -47,7 +47,7 @@ final class GeminiService {
                 throw NSError(domain: "GeminiService", code: 1,
                               userInfo: [NSLocalizedDescriptionKey: "No textual response from model"])
             }
-
+            print("Raw text: \(text)")
             // Try extracting first JSON substring (tolerant parsing)
             if let jsonData = firstJSONData(from: text) {
                 do {

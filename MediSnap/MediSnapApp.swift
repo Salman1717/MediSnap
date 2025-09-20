@@ -25,11 +25,12 @@ struct MediSnapApp: App {
     var body: some Scene {
         
         WindowGroup {
-            if showAuthView{
-                AuthView(showAuthView: $showAuthView)
-            }else{
-                ContentView()
-            }
+//            if showAuthView{
+//                AuthView(showAuthView: $showAuthView)
+//            }else{
+//                ContentView()
+//            }
+            ExtractView()
         }
     }
 }
