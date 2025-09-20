@@ -30,7 +30,6 @@ struct MediSnapApp: App {
             }else{
                 ContentView(showAuth: $showAuthView)
             }
-//            ExtractView()
         }
     }
 }

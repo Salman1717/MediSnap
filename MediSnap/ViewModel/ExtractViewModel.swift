@@ -8,6 +8,7 @@
 import UIKit
 import SwiftUI
 import Combine
+import FirebaseAuth
 
 @MainActor
 class ExtractViewModel: ObservableObject {
@@ -19,6 +20,7 @@ class ExtractViewModel: ObservableObject {
     @Published var showCamera: Bool = false
     @Published var selectedImage: UIImage? = nil
 
+    // existing processImage(...) left unchanged
     func processImage(_ image: UIImage) async {
         isLoading = true
         errorMessage = nil
@@ -37,10 +39,30 @@ class ExtractViewModel: ObservableObject {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd"
                 prescriptionDate = formatter.date(from: dateString)
+            } else {
+                // fallback: use today
+                prescriptionDate = Date()
             }
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    // NEW: savePrescription returns the saved Prescription
+    func savePrescription() async throws -> Prescription {
+        guard let date = prescriptionDate else {
+            throw NSError(domain: "ExtractViewModel", code: 400, userInfo: [NSLocalizedDescriptionKey: "Prescription date is missing"])
+        }
+
+        let prescription = Prescription(id: UUID().uuidString, date: date, medications: medications)
+
+        // ensure user authenticated for Firestore rules — you can sign in anon if needed
+        if Auth.auth().currentUser == nil {
+            _ = try await Auth.auth().signInAnonymously()
+        }
+
+        try await FirebaseService.shared.savePrescription(prescription)
+        return prescription
     }
 }

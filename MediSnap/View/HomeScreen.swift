@@ -18,18 +18,31 @@ struct HomeScreen: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                // Background
-                gradientBackground
-                    .ignoresSafeArea()
-
-                VStack(spacing: 50) {
-
-                    // App Title
-                    Text("MediSnap")
-                        .font(.system(size: 48, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.top, 60)
+            VStack(spacing: 40) {
+                
+                // App Title
+                Text("MediSnap")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .padding(.top, 60)
+                
+                Spacer()
+                
+                // Main Buttons
+                VStack(spacing: 20) {
+                    
+                    // Scan Prescription Button
+                    NavigationLink(destination: ExtractView().navigationBarBackButtonHidden()){
+                        Text("Scan Prescription")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                            .shadow(radius: 4)
+                    }
+                    
                     
                     Image("homeIllus")
                         .resizable()

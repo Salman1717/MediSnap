@@ -13,6 +13,11 @@ final class AuthServices{
     
     private init(){ }
     
+    var currentUser: User? {
+            return Auth.auth().currentUser
+        }
+
+    
     func getAuthenticatedUser() throws -> AuthDataResultModel {
         guard let user = Auth.auth().currentUser else {
             throw URLError(.badURL)

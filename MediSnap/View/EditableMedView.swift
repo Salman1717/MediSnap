@@ -1,27 +1,16 @@
-//
-//  EditableMedicationsView.swift
-//  MediSnap
-//
-//  Created by Aaseem Mhaskar on 20/09/25.
-//
-
+// EditableMedicationsView.swift
 import SwiftUI
 
 struct EditableMedicationsView: View {
     @ObservedObject var vm: ExtractViewModel
 
+    @State private var isSaving = false
+    @State private var showAgentPrompt = false
+    @State private var savedPrescriptionId: String?
+    @State private var lastSavedPrescription: Prescription?
+
     var body: some View {
         VStack(spacing: 12) {
-            if let date = vm.prescriptionDate {
-                HStack {
-                    Text("Prescription Date:")
-                    Spacer()
-                    Text(date, style: .date)
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-            }
-
             List {
                 if vm.medications.isEmpty {
                     Text("No medications extracted").foregroundColor(.secondary)
@@ -64,7 +53,62 @@ struct EditableMedicationsView: View {
                 }
             }
             .listStyle(.plain)
+
+            HStack(spacing: 12) {
+                Button(action: { Task { await saveAndPromptAgent() }}) {
+                    if isSaving {
+                        ProgressView().padding(.vertical, 8)
+                    } else {
+                        Text("Save & Setup")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .disabled(isSaving || vm.medications.isEmpty)
+                .buttonStyle(.borderedProminent)
+
+                Button("Save") {
+                    Task {
+                        isSaving = true
+                        do {
+                            _ = try await vm.savePrescription()
+                            // simple success feedback
+                        } catch {
+                            vm.errorMessage = error.localizedDescription
+                        }
+                        isSaving = false
+                    }
+                }
+                .disabled(isSaving || vm.medications.isEmpty)
+                .buttonStyle(.bordered)
+            }
+            .padding()
         }
         .navigationTitle("Editable Medications")
+        // Alert-like confirmation sheet (iOS 15+ sheet style)
+        .confirmationDialog("Setup agentic actions for prescription \(savedPrescriptionId ?? "")?", isPresented: $showAgentPrompt, titleVisibility: .visible) {
+            Button("Yes — run agent") {
+                if let pres = lastSavedPrescription {
+//                    Task { await AgenticManager.shared.startFlow(prescription: pres) }
+                }
+            }
+            Button("No, later", role: .cancel) { }
+        } message: {
+            Text("AI can automatically set up reminders, checklist and a shareable summary for this prescription.")
+        }
+    }
+
+    // Save then display prompt to run agent
+    private func saveAndPromptAgent() async {
+        isSaving = true
+        do {
+            let saved = try await vm.savePrescription()
+            lastSavedPrescription = saved
+            savedPrescriptionId = saved.id
+            // Show confirmation to run the agent
+            showAgentPrompt = true
+        } catch {
+            vm.errorMessage = error.localizedDescription
+        }
+        isSaving = false
     }
 }
