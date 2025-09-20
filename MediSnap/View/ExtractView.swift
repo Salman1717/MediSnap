@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import SwiftfulLoadingIndicators
 
 struct ExtractView: View {
     @StateObject private var vm = ExtractViewModel()
@@ -117,17 +118,7 @@ struct ExtractView: View {
                 // Loader overlay
                 if vm.isLoading {
                     ZStack {
-                        Color.black.opacity(0.4).ignoresSafeArea()
-                        ProgressView("Extracting...")
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.black.opacity(0.6))
-                            .cornerRadius(12)
-                            .shadow(radius: 10)
-                            .scaleEffect(1.2)
-                            .transition(.opacity.combined(with: .scale))
-                            .animation(.easeInOut, value: vm.isLoading)
+                        LoadingIndicator(animation: .doubleHelix,size: .large, speed: .slow)
                     }
                 }
             }

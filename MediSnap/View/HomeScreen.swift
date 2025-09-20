@@ -23,7 +23,6 @@ struct HomeScreen: View {
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 5)
                         .padding(.top, 60)
                     
                     // Illustration Image
@@ -50,7 +49,8 @@ struct HomeScreen: View {
                         .glassButton()
 
                         // View Schedule Button
-                        NavigationLink(destination: Text("Schedule Screen Coming Soon")) {
+                        NavigationLink(destination: PrescriptionHistoryView().navigationBarBackButtonHidden())
+                        {
                             Text("View Schedule")
                                 .font(.headline)
                                 .foregroundColor(.white)
