@@ -3,12 +3,13 @@ import SwiftUI
 
 struct EditableMedicationsView: View {
     @ObservedObject var vm: ExtractViewModel
-
+    
     @State private var isSaving = false
     @State private var showAgentPrompt = false
     @State private var savedPrescriptionId: String?
     @State private var lastSavedPrescription: Prescription?
-
+    @State private var showAgentFlow = false
+    
     var body: some View {
         VStack(spacing: 12) {
             List {
@@ -19,7 +20,7 @@ struct EditableMedicationsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             TextField("Name", text: $med.name)
                                 .textFieldStyle(.roundedBorder)
-
+                            
                             HStack {
                                 TextField("Dosage", text: Binding(
                                     get: { med.dosage ?? "" },
@@ -31,7 +32,7 @@ struct EditableMedicationsView: View {
                                 ))
                             }
                             .textFieldStyle(.roundedBorder)
-
+                            
                             HStack {
                                 TextField("Duration", text: Binding(
                                     get: { med.duration ?? "" },
@@ -43,7 +44,7 @@ struct EditableMedicationsView: View {
                                 ))
                             }
                             .textFieldStyle(.roundedBorder)
-
+                            
                             if let original = med.originalText {
                                 Text("OCR: \(original)").font(.caption2).foregroundColor(.gray)
                             }
@@ -53,25 +54,34 @@ struct EditableMedicationsView: View {
                 }
             }
             .listStyle(.plain)
-
+            
             HStack(spacing: 12) {
-                Button(action: { Task { await saveAndPromptAgent() }}) {
+                Button(action: {
+                    Task {
+                        isSaving = true
+                        await vm.saveAndRunAgent()
+                        isSaving = false
+                        // present agent flow UI (vm.runningAgentPrescription gets set if saved succeeded)
+                        if vm.runningAgentPrescription != nil {
+                            showAgentFlow = true
+                        }
+                    }
+                }) {
                     if isSaving {
                         ProgressView().padding(.vertical, 8)
                     } else {
-                        Text("Save & Setup")
+                        Text("Save & Setup (Agent)")
                             .frame(maxWidth: .infinity)
                     }
                 }
                 .disabled(isSaving || vm.medications.isEmpty)
                 .buttonStyle(.borderedProminent)
-
-                Button("Save") {
+                
+                Button("Save only") {
                     Task {
                         isSaving = true
                         do {
-                            _ = try await vm.savePrescription()
-                            // simple success feedback
+                            _ = try await vm.savePrescriptionOnly()
                         } catch {
                             vm.errorMessage = error.localizedDescription
                         }
@@ -84,31 +94,15 @@ struct EditableMedicationsView: View {
             .padding()
         }
         .navigationTitle("Editable Medications")
-        // Alert-like confirmation sheet (iOS 15+ sheet style)
-        .confirmationDialog("Setup agentic actions for prescription \(savedPrescriptionId ?? "")?", isPresented: $showAgentPrompt, titleVisibility: .visible) {
-            Button("Yes — run agent") {
-                if let pres = lastSavedPrescription {
-//                    Task { await AgenticManager.shared.startFlow(prescription: pres) }
-                }
+        .sheet(isPresented: $showAgentFlow, onDismiss: {
+            // optionally reset vm.runningAgentPrescription
+            vm.runningAgentPrescription = nil
+        }) {
+            if let pres = vm.runningAgentPrescription {
+                AgenticFlowView(prescription: pres)
+            } else {
+                Text("No prescription")
             }
-            Button("No, later", role: .cancel) { }
-        } message: {
-            Text("AI can automatically set up reminders, checklist and a shareable summary for this prescription.")
         }
-    }
-
-    // Save then display prompt to run agent
-    private func saveAndPromptAgent() async {
-        isSaving = true
-        do {
-            let saved = try await vm.savePrescription()
-            lastSavedPrescription = saved
-            savedPrescriptionId = saved.id
-            // Show confirmation to run the agent
-            showAgentPrompt = true
-        } catch {
-            vm.errorMessage = error.localizedDescription
-        }
-        isSaving = false
     }
 }
