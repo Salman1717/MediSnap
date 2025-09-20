@@ -1,10 +1,12 @@
 import SwiftUI
+import FirebaseAuth
 
 struct ProfileView: View {
-    // Example user data
-    @State private var userName: String = "Aaseem Mhaskar"
-    @State private var profileCompletion: Double = 0.65 // 65% completed
-    
+    @State private var userName: String = "User"
+    @State private var profileCompletion: Double = 0.65
+    @Environment(\.presentationMode) private var presentationMode
+    @State private var showAuthView: Bool = false
+
     var gradientBackground: LinearGradient {
         LinearGradient(
             colors: [Color.blue.opacity(0.7), Color.teal.opacity(0.6)],
@@ -15,7 +17,6 @@ struct ProfileView: View {
 
     var body: some View {
         ZStack {
-            // Background Gradient
             gradientBackground
                 .ignoresSafeArea()
 
@@ -28,30 +29,17 @@ struct ProfileView: View {
                     .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 5)
                     .padding(.top, 60)
 
-                // Profile Completion Progress
-                VStack(spacing: 16) {
-                    Text("Medicine Progress")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    ProgressView(value: profileCompletion)
-                        .progressViewStyle(LinearProgressViewStyle(tint: Color.white))
-                        .frame(height: 10)
-                        .background(Color.white.opacity(0.3))
-                        .cornerRadius(5)
-                    
-                    Text("\(Int(profileCompletion * 100))% completed")
-                        .font(.subheadline)
-                        .foregroundColor(.black.opacity(0.8))
-                }
-                .padding(.horizontal, 24)
-
                 Spacer()
 
                 // Log Out Button
                 Button(action: {
-                    print("Log Out tapped")
-                    // TODO: Add logout functionality
+                    do {
+                        try AuthServices.shared.signOut()
+                        showAuthView = true
+                        presentationMode.wrappedValue.dismiss()
+                    } catch {
+                        print("Sign out failed:", error.localizedDescription)
+                    }
                 }) {
                     Text("Log Out")
                         .font(.headline)
@@ -67,6 +55,14 @@ struct ProfileView: View {
             }
         }
         .navigationBarTitle("Profile", displayMode: .inline)
+        .task {
+            if let user = AuthServices.shared.currentUser {
+                userName = user.displayName ?? user.email ?? "User"
+            }
+        }
+        .fullScreenCover(isPresented: $showAuthView) {
+            AuthView(showAuthView: $showAuthView) // Pass the binding here
+        }
     }
 }
 

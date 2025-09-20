@@ -4,8 +4,9 @@ import SwiftfulLoadingIndicators
 
 struct ExtractView: View {
     @StateObject private var vm = ExtractViewModel()
+    @Environment(\.presentationMode) private var presentationMode
     @State private var selectedItem: PhotosPickerItem?
-    
+
     var gradientBackground: LinearGradient {
         LinearGradient(
             colors: [Color.blue.opacity(0.7), Color.teal.opacity(0.6)],
@@ -13,7 +14,7 @@ struct ExtractView: View {
             endPoint: .bottomTrailing
         )
     }
-    
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -22,44 +23,37 @@ struct ExtractView: View {
                     .sheet(isPresented: $vm.showCamera) {
                         ImagePicker(sourceType: .camera, selectedImage: $vm.selectedImage)
                     }
-                // MARK: - Handle gallery selection
-                .onChange(of: selectedItem) { newItem in
-                    Task {
-                        guard let item = newItem else { return } // unwrap PhotosPickerItem
-                        do {
-                            if let data = try await item.loadTransferable(type: Data.self),
-                               let uiImage = UIImage(data: data) {
-                                vm.selectedImage = uiImage
-                                // Call async method directly
-                                await vm.processImage(uiImage)
-
-                            }
-                        } catch {
-                            vm.errorMessage = error.localizedDescription
-                        }
+                    .onChange(of: selectedItem) { _, newItem in
+                        handleGallerySelection(newItem)
                     }
-                }
-
-                // MARK: - Handle camera image
-                .onChange(of: vm.selectedImage) { newImage in
-                    Task {
-                        guard let img = newImage else { return } // unwrap UIImage
-                        // Call async method directly
-                        await vm.processImage(img)
-
+                    .onChange(of: vm.selectedImage) { _, newImage in
+                        handleCameraImage(newImage)
                     }
-                }
 
-                
                 if vm.isLoading {
-                    ZStack {
-                        LoadingIndicator(animation: .doubleHelix,size: .large, speed: .slow)
+                    loaderOverlay
+                }
+            }
+            .navigationTitle("Prescription OCR")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
+                        }
+                        .foregroundColor(.white)
                     }
                 }
             }
         }
     }
-    
+
+    // MARK: - Components
+
     private var mainContent: some View {
         VStack(spacing: 20) {
             Text("Extract Prescription")
@@ -68,24 +62,24 @@ struct ExtractView: View {
                 .foregroundColor(.white)
                 .padding(.top, 30)
                 .shadow(radius: 5)
-            
+
             prescriptionImageView
-            
+
             HStack(spacing: 16) {
                 cameraButton
                 galleryButton
             }
             .padding(.horizontal)
-            
+
             if let error = vm.errorMessage {
                 Text(error)
                     .foregroundColor(.red)
                     .font(.caption)
                     .padding(.horizontal)
             }
-            
+
             Spacer()
-            
+
             NavigationLink(destination: EditableMedicationsView(vm: vm)) {
                 Text("Edit Medications")
                     .fontWeight(.semibold)
@@ -100,7 +94,7 @@ struct ExtractView: View {
             .padding(.bottom, 16)
         }
     }
-    
+
     private var prescriptionImageView: some View {
         Group {
             if let image = vm.selectedImage {
@@ -126,7 +120,7 @@ struct ExtractView: View {
         }
         .animation(.easeInOut, value: vm.selectedImage)
     }
-    
+
     private var cameraButton: some View {
         Button(action: { vm.showCamera = true }) {
             Label("Camera", systemImage: "camera.fill")
@@ -138,7 +132,7 @@ struct ExtractView: View {
                 .shadow(radius: 4)
         }
     }
-    
+
     private var galleryButton: some View {
         PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
             Label("Gallery", systemImage: "photo.fill.on.rectangle.fill")
@@ -150,7 +144,7 @@ struct ExtractView: View {
                 .shadow(radius: 4)
         }
     }
-    
+
     private var loaderOverlay: some View {
         ZStack {
             Color.black.opacity(0.4).ignoresSafeArea()
@@ -166,7 +160,7 @@ struct ExtractView: View {
                 .animation(.easeInOut, value: vm.isLoading)
         }
     }
-    
+
     // MARK: - Handlers
     private func handleGallerySelection(_ newItem: PhotosPickerItem?) {
         Task {
@@ -178,7 +172,7 @@ struct ExtractView: View {
             }
         }
     }
-    
+
     private func handleCameraImage(_ newImage: UIImage?) {
         Task {
             guard let img = newImage else { return }

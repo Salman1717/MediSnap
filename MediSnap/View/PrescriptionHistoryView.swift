@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftfulLoadingIndicators
+import FirebaseAuth
 
 struct PrescriptionHistoryView: View {
     @StateObject private var vm = PrescriptionHistoryViewModel()
@@ -12,13 +13,15 @@ struct PrescriptionHistoryView: View {
         )
     }
 
+    @Environment(\.presentationMode) private var presentationMode
+
     var body: some View {
         NavigationView {
             ZStack {
                 backgroundGradient.ignoresSafeArea()
                 
                 if vm.isLoading {
-                    LoadingIndicator(animation: .threeBallsTriangle, color: .red, size: .large, speed: .fast)
+                    LoadingIndicator(animation: .threeBallsTriangle, color: .blue, size: .large, speed: .fast)
                 } else if let error = vm.errorMessage {
                     Text(error)
                         .foregroundColor(.red)
@@ -41,6 +44,17 @@ struct PrescriptionHistoryView: View {
                 }
             }
             .navigationTitle("Prescription History")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
+                        }
+                        .foregroundColor(.white)
+                    }
+                }
+            }
             .task {
                 if let userId = AuthServices.shared.currentUser?.uid {
                     await vm.fetchPrescriptions(for: userId)
