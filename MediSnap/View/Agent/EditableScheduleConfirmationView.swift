@@ -11,7 +11,9 @@ struct EditableScheduleConfirmationView: View {
     @Environment(\.presentationMode) var presentationMode
     
     @State private var isSaving = false
+    @State private var isAddingToCalendar = false
     @State private var showSuccessAlert = false
+    @State private var showCalendarSuccessAlert = false
     
     var body: some View {
         NavigationView {
@@ -79,17 +81,28 @@ struct EditableScheduleConfirmationView: View {
                         
                         Button(action: {
                             Task {
+                                isAddingToCalendar = true
                                 await vm.addScheduleToGoogleCalendar()
+                                isAddingToCalendar = false
+                                if vm.errorMessage == nil {
+                                    showCalendarSuccessAlert = true
+                                }
                             }
                         }) {
                             HStack {
-                                Image(systemName: "calendar.badge.plus")
+                                if isAddingToCalendar {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "calendar.badge.plus")
+                                }
                                 Text("Add to Google Calendar")
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                         }
                         .buttonStyle(.bordered)
+                        .disabled(isAddingToCalendar)
                     }
                     .padding()
                     .background(Color(.systemGroupedBackground))
@@ -119,6 +132,11 @@ struct EditableScheduleConfirmationView: View {
             }
         } message: {
             Text("Your medication schedule has been saved successfully.")
+        }
+        .alert("Added to Calendar!", isPresented: $showCalendarSuccessAlert) {
+            Button("OK") { }
+        } message: {
+            Text("Your medication reminders have been added to Google Calendar successfully.")
         }
     }
 }

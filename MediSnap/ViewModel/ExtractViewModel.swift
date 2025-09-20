@@ -120,15 +120,37 @@ class ExtractViewModel: ObservableObject {
     }
 
 
-      // Add schedule to Google Calendar
-      func addScheduleToGoogleCalendar() async {
-          // Map medicationSchedule -> Google Calendar events
-          // Example: use event titles as medication name & reminders as times
-          // Save event IDs back to Firestore if needed
-          
-          // For now, just show a placeholder message
-          print("Adding schedule to Google Calendar - feature to be implemented")
-      }
+    // Add schedule to Google Calendar
+    func addScheduleToGoogleCalendar() async {
+        let schedule = GeminiService.shared.medicationSchedule
+        
+        guard !schedule.isEmpty else {
+            errorMessage = "No schedule available to add to calendar."
+            return
+        }
+        
+        do {
+            let eventIds = try await GoogleCalendarService.shared.addMedicationScheduleToCalendar(schedule: schedule)
+            
+            // Optionally save event IDs to Firestore for future reference
+            if let presId = currentPrescriptionId {
+                try await saveCalendarEventIds(prescriptionId: presId, eventIds: eventIds)
+            }
+            
+            errorMessage = nil
+            print("Successfully added \(eventIds.count) events to Google Calendar")
+            
+        } catch {
+            errorMessage = "Failed to add schedule to Google Calendar: \(error.localizedDescription)"
+        }
+    }
+    
+    // Save calendar event IDs to Firestore (optional)
+    private func saveCalendarEventIds(prescriptionId: String, eventIds: [String]) async throws {
+        // You can implement this to save event IDs to Firestore
+        // This allows you to delete events later if needed
+        print("Saving calendar event IDs: \(eventIds)")
+    }
     
     // Helper parsers
     private func parseFrequency(_ text: String) -> Int {
