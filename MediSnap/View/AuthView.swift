@@ -16,7 +16,6 @@ struct AuthView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background gradient
                 LinearGradient(
                     colors: [Color.blue.opacity(0.7), Color.teal.opacity(0.6)],
                     startPoint: .topLeading,
@@ -28,7 +27,6 @@ struct AuthView: View {
                     
                     Spacer()
                     
-                    // App Icon / Symbol
                     Image(systemName: "pills.fill")
                         .resizable()
                         .scaledToFit()
@@ -36,7 +34,7 @@ struct AuthView: View {
                         .foregroundColor(.white)
                         .shadow(radius: 8)
                     
-                    // App Title
+                    
                     Text("MediSnap")
                         .font(.system(size: 36, weight: .bold))
                         .foregroundColor(.white)

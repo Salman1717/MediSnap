@@ -1,10 +1,3 @@
-//
-//  ExtractView.swift
-//  MediSnap
-//
-//  Created by Salman Mhaskar on 20/09/25.
-//
-
 import SwiftUI
 import PhotosUI
 
@@ -12,89 +5,130 @@ struct ExtractView: View {
     @StateObject private var vm = ExtractViewModel()
     @State private var selectedItem: PhotosPickerItem?
 
+    var gradientBackground: LinearGradient {
+        LinearGradient(
+            colors: [Color.blue.opacity(0.7), Color.teal.opacity(0.6)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 16) {
-                Text("Extract Prescription")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .padding(.top, 20)
+            ZStack {
+                VStack(spacing: 20) {
+                    Text("Extract Prescription")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.top, 30)
+                        .shadow(radius: 5)
 
-                HStack(spacing: 16) {
-                    Button(action: { vm.showCamera = true }) {
-                        Label("Camera", systemImage: "camera.fill")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+                    Group {
+                        if let image = vm.selectedImage {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 260)
+                                .cornerRadius(16)
+                                .shadow(radius: 5)
+                                .padding(.horizontal)
+                        } else {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.2))
+                                .frame(height: 260)
+                                .overlay(Text("Capture or Select Prescription Image")
+                                    .foregroundColor(.white)
+                                    .font(.headline))
+                                .cornerRadius(16)
+                                .padding(.horizontal)
+                        }
                     }
+                    .animation(.easeInOut, value: vm.selectedImage)
 
-                    PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
-                        Label("Gallery", systemImage: "photo.fill.on.rectangle.fill")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.green)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+                    HStack(spacing: 16) {
+                        Button(action: { vm.showCamera = true }) {
+                            Label("Camera", systemImage: "camera.fill")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(gradientBackground)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                                .shadow(radius: 4)
+                        }
+
+                        PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
+                            Label("Gallery", systemImage: "photo.fill.on.rectangle.fill")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(gradientBackground)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                                .shadow(radius: 4)
+                        }
                     }
-                }
-                .padding(.horizontal)
-
-                if let image = vm.selectedImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 240)
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                } else {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.1))
-                        .frame(height: 240)
-                        .overlay(Text("No image selected").foregroundColor(.secondary))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                }
-
-                if vm.isLoading {
-                    ProgressView("Extracting...")
-                        .padding()
-                }
-
-                if let error = vm.errorMessage {
-                    Text(error)
-                        .foregroundColor(.red)
-                        .font(.caption)
-                        .padding(.horizontal)
-                }
-
-                NavigationLink("Edit Medications", destination: EditableMedicationsView(vm: vm))
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
                     .padding(.horizontal)
 
-                Spacer()
-            }
-            .navigationTitle("Prescription OCR")
-            .sheet(isPresented: $vm.showCamera) {
-                ImagePicker(sourceType: .camera, selectedImage: $vm.selectedImage)
-            }
-            .onChange(of: selectedItem) { newItem in
-                Task {
-                    if let data = try? await newItem?.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: data) {
-                        vm.selectedImage = uiImage
-                        await vm.processImage(uiImage)
+                    if let error = vm.errorMessage {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                            .padding(.horizontal)
+                    }
+
+                    Spacer()
+
+                    // Always at bottom
+                    NavigationLink(destination: EditableMedicationsView(vm: vm)) {
+                        Text("Edit Medications")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(gradientBackground)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                            .shadow(radius: 4)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 16)
+                }
+                .background(
+                    gradientBackground
+                        .ignoresSafeArea()
+                )
+                .sheet(isPresented: $vm.showCamera) {
+                    ImagePicker(sourceType: .camera, selectedImage: $vm.selectedImage)
+                }
+                .onChange(of: selectedItem) { newItem in
+                    Task {
+                        if let data = try? await newItem?.loadTransferable(type: Data.self),
+                           let uiImage = UIImage(data: data) {
+                            vm.selectedImage = uiImage
+                            await vm.processImage(uiImage)
+                        }
                     }
                 }
-            }
-            .onChange(of: vm.selectedImage) { newImage in
-                if let img = newImage {
-                    Task { await vm.processImage(img) }
+                .onChange(of: vm.selectedImage) { newImage in
+                    if let img = newImage {
+                        Task { await vm.processImage(img) }
+                    }
+                }
+
+                // Loader overlay
+                if vm.isLoading {
+                    ZStack {
+                        Color.black.opacity(0.4).ignoresSafeArea()
+                        ProgressView("Extracting...")
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(12)
+                            .shadow(radius: 10)
+                            .scaleEffect(1.2)
+                            .transition(.opacity.combined(with: .scale))
+                            .animation(.easeInOut, value: vm.isLoading)
+                    }
                 }
             }
         }
@@ -102,7 +136,6 @@ struct ExtractView: View {
 }
 
 
-// MARK: - Preview
 #Preview {
     ExtractView()
 }
