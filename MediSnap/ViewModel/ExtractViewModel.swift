@@ -17,7 +17,11 @@ class ExtractViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showCamera: Bool = false
     @Published var selectedImage: UIImage? = nil
+    
+    @Published var showScheduleConfirmation: Bool = false
+    var currentPrescriptionId: String?
 
+    
     // MARK: - Process image (OCR + extraction)
     func processImage(_ image: UIImage) async {
         isLoading = true
@@ -54,30 +58,94 @@ class ExtractViewModel: ObservableObject {
     }
     
     // MARK: - Save prescription to Firestore
-    func savePrescription() async {
+    func savePrescriptionAndGenerateSchedule() async {
         guard !medications.isEmpty else {
             errorMessage = "No medications to save."
             return
         }
-        
+
         isLoading = true
         errorMessage = nil
-        
+
         let date = prescriptionDate ?? Date()
-        
+
         do {
             // Ensure user is signed in (anonymous fallback)
             if Auth.auth().currentUser == nil {
                 _ = try await Auth.auth().signInAnonymously()
             }
-            
+
+            // Save prescription
             let pres = Prescription(id: UUID().uuidString, date: date, medications: medications)
             try await FirebaseService.shared.savePrescription(pres)
-            
+            currentPrescriptionId = pres.id
+
+            // ✅ Generate schedule using Gemini
+            try await GeminiService.shared.generateScheduleWithGemini(prescription: pres)
+
+            // ✅ Clear any previous error messages if successful
+            errorMessage = nil
+
         } catch {
-            errorMessage = "Failed to save prescription: \(error.localizedDescription)"
+            errorMessage = "Failed to save prescription or generate schedule: \(error.localizedDescription)"
         }
-        
+
         isLoading = false
+    }
+
+    
+    func saveScheduleToFirestore() async {
+        guard let presId = currentPrescriptionId else {
+            errorMessage = "No prescription ID available."
+            return
+        }
+
+        // ✅ Use the schedule from GeminiService
+        let validSchedules = GeminiService.shared.medicationSchedule.filter { !$0.reminders.isEmpty }
+        
+        guard !validSchedules.isEmpty else {
+            errorMessage = "No valid schedules to save."
+            return
+        }
+
+        do {
+            try await FirebaseService.shared.saveSchedule(
+                prescriptionId: presId,
+                schedule: validSchedules
+            )
+            errorMessage = nil // Clear any previous errors
+        } catch {
+            errorMessage = "Failed to save schedule: \(error.localizedDescription)"
+        }
+    }
+
+
+      // Add schedule to Google Calendar
+      func addScheduleToGoogleCalendar() async {
+          // Map medicationSchedule -> Google Calendar events
+          // Example: use event titles as medication name & reminders as times
+          // Save event IDs back to Firestore if needed
+          
+          // For now, just show a placeholder message
+          print("Adding schedule to Google Calendar - feature to be implemented")
+      }
+    
+    // Helper parsers
+    private func parseFrequency(_ text: String) -> Int {
+        let lower = text.lowercased()
+        if lower.contains("once") { return 1 }
+        if lower.contains("twice") { return 2 }
+        if lower.contains("thrice") { return 3 }
+        // fallback: 1
+        return 1
+    }
+    
+    private func parseDuration(_ text: String) -> Int {
+        // Extract number of days from string like "5 days"
+        let components = text.components(separatedBy: CharacterSet.decimalDigits.inverted)
+        for comp in components {
+            if let num = Int(comp) { return max(num, 1) }
+        }
+        return 1
     }
 }

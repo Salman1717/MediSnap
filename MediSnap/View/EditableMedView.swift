@@ -1,14 +1,10 @@
-//
-// EditableMedicationsView.swift
-// MediSnap
-//
-
 import SwiftUI
 
 struct EditableMedicationsView: View {
     @ObservedObject var vm: ExtractViewModel
     
     @State private var isSaving = false
+    @State private var showScheduleConfirmation = false
     
     var body: some View {
         VStack(spacing: 12) {
@@ -59,14 +55,25 @@ struct EditableMedicationsView: View {
                 Button(action: {
                     Task {
                         isSaving = true
-                        await vm.savePrescription()
+                        // ✅ Save prescription and generate schedule
+                        await vm.savePrescriptionAndGenerateSchedule()
                         isSaving = false
+                        
+                        // ✅ Show schedule confirmation if schedule was generated
+                        if !GeminiService.shared.medicationSchedule.isEmpty {
+                            showScheduleConfirmation = true
+                        }
                     }
                 }) {
                     if isSaving {
-                        ProgressView().padding(.vertical, 8)
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text("Generating Schedule...")
+                        }
+                        .padding(.vertical, 8)
                     } else {
-                        Text("Save Prescription")
+                        Text("Save & Generate Schedule")
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -82,6 +89,9 @@ struct EditableMedicationsView: View {
                     .padding(.horizontal)
             }
         }
-        .navigationTitle("Editable Medications")
+        .navigationTitle("Edit Medications")
+        .sheet(isPresented: $showScheduleConfirmation) {
+            EditableScheduleConfirmationView(vm: vm)
+        }
     }
 }
