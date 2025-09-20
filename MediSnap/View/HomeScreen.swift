@@ -24,10 +24,7 @@ struct HomeScreen: View {
                 VStack(spacing: 20) {
                     
                     // Scan Prescription Button
-                    Button(action: {
-                        print("Scan Prescription tapped")
-                        // TODO: Navigate to scan feature screen
-                    }) {
+                    NavigationLink(destination: ExtractView().navigationBarBackButtonHidden()){
                         Text("Scan Prescription")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
@@ -37,6 +34,7 @@ struct HomeScreen: View {
                             .cornerRadius(12)
                             .shadow(radius: 4)
                     }
+                    
                     
                     // View Schedule Button
                     NavigationLink(destination: Text("Schedule Screen Coming Soon")) {

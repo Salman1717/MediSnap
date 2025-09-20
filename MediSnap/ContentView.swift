@@ -7,29 +7,46 @@
 
 import SwiftUI
 
+import SwiftUI
+
 struct ContentView: View {
     @Binding var showAuth: Bool
-    @ObservedObject var viewModel = AuthViewModel()
+  
+
     var body: some View {
-        VStack {
-            
-            Text("Helloo Bhaiii")
-            
-            Button(action: {
-                viewModel.logout()
-                showAuth = true
-            }) {
-                Text("Logout")
-                    .bold()
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+        NavigationView {
+            ZStack(alignment: .topTrailing) {
+                // Replace with your real home view
+                HomeScreen()
+                    .navigationBarHidden(true)
+
+                // Logout button at top-right
+                Button(action: {
+                    do {
+                        try AuthServices.shared.signOut()
+                        // After signOut, show the auth screen
+                        showAuth = true
+                    } catch {
+                        // Handle sign out error (you can show an alert instead)
+                        print("Sign out failed:", error.localizedDescription)
+                        showAuth = true // still fallback to auth UI if desired
+                    }
+                }) {
+                    Text("Logout")
+                        .bold()
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .padding()
             }
-            .padding(.horizontal)
+            .ignoresSafeArea(edges: .top) // optional: let the button float into the safe area
         }
     }
 }
+
+
 
 
