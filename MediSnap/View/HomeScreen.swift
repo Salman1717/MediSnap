@@ -1,10 +1,3 @@
-//
-//  HomeScreen.swift
-//  MediSnap
-//
-//  Created by Aaseem Mhaskar on 20/09/25.
-//
-
 import SwiftUI
 
 struct HomeScreen: View {
@@ -18,32 +11,22 @@ struct HomeScreen: View {
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 40) {
+            ZStack {
+                // Gradient background
+                gradientBackground
+                    .ignoresSafeArea()
                 
-                // App Title
-                Text("MediSnap")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .padding(.top, 60)
-                
-                Spacer()
-                
-                // Main Buttons
-                VStack(spacing: 20) {
+                VStack(spacing: 40) {
                     
-                    // Scan Prescription Button
-                    NavigationLink(destination: ExtractView().navigationBarBackButtonHidden()){
-                        Text("Scan Prescription")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
-                            .shadow(radius: 4)
-                    }
+                    // App Title
+                    Text("MediSnap")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 5)
+                        .padding(.top, 60)
                     
-                    
+                    // Illustration Image
                     Image("homeIllus")
                         .resizable()
                         .scaledToFit()
@@ -51,17 +34,18 @@ struct HomeScreen: View {
                         .cornerRadius(20)
                         .shadow(radius: 8)
                         .padding(.horizontal)
-
+                    
                     Spacer()
 
                     // Main Buttons
                     VStack(spacing: 20) {
 
                         // Scan Prescription Button
-                        NavigationLink(destination: ExtractView()) {
+                        NavigationLink(destination: ExtractView().navigationBarBackButtonHidden()) {
                             Text("Scan Prescription")
                                 .font(.headline)
-                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .foregroundColor(.white)
                         }
                         .glassButton()
 
@@ -69,7 +53,7 @@ struct HomeScreen: View {
                         NavigationLink(destination: Text("Schedule Screen Coming Soon")) {
                             Text("View Schedule")
                                 .font(.headline)
-                                .foregroundColor(.black)
+                                .foregroundColor(.white)
                         }
                         .glassButton()
                     }
@@ -83,7 +67,7 @@ struct HomeScreen: View {
     }
 }
 
-// Glass Button Modifier (reuse from ExtractView)
+// Glass Button Modifier
 struct GlassButton: ViewModifier {
     func body(content: Content) -> some View {
         content
