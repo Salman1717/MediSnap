@@ -14,24 +14,33 @@ struct GoogleSignInResultModel{
     let accessToken: String
 }
 
-final class GoogleSignInHelper{
+final class GoogleSignInHelper {
     
     @MainActor
-    func signIn() async throws -> GoogleSignInResultModel{
-        guard let TopVC =  Utilities.shared.topViewController() else{
+    func signIn() async throws -> GoogleSignInResultModel {
+        guard let topVC = Utilities.shared.topViewController() else {
             throw URLError(.cannotFindHost)
         }
         
-        let GIDSignInResult = try await GIDSignIn.sharedInstance.signIn(withPresenting: TopVC)
+        // Define Calendar scopes
+        let calendarScopes = [
+            "https://www.googleapis.com/auth/calendar" // Full calendar access
+        ]
         
-        guard let idToken = GIDSignInResult.user.idToken?.tokenString else{
+        // Sign in with additional scopes
+        let GIDSignInResult = try await GIDSignIn.sharedInstance.signIn(
+            withPresenting: topVC, hint: "",
+            additionalScopes: calendarScopes
+        )
+        
+        // Extract ID and access tokens
+        guard let idToken = GIDSignInResult.user.idToken?.tokenString else {
             throw URLError(.badServerResponse)
         }
         
         let accessToken = GIDSignInResult.user.accessToken.tokenString
         
-        let tokens = GoogleSignInResultModel(idToken: idToken, accessToken: accessToken)
-        
-        return tokens
+        return GoogleSignInResultModel(idToken: idToken, accessToken: accessToken)
     }
 }
+
