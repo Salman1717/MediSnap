@@ -9,21 +9,28 @@ import Foundation
 import Combine
 
 @MainActor
-final class AuthViewModel: ObservableObject{
-    
-    func signInGoogle() async throws{
-        let helper = GoogleSignInHelper()
-        let tokens = try await helper.signIn()
+final class AuthViewModel: ObservableObject {
+    @Published var isSignedIn: Bool = false
+
+    func signInGoogle() async throws {
+        if isSignedIn { return } // prevent multiple sign-ins
+
+        let tokens = try await GoogleSignInHelper.shared.signIn()
         try await AuthServices.shared.signInWithGoogle(tokens: tokens)
+        isSignedIn = true
     }
-    
+
     func logout() {
         Task {
             do {
-                try  AuthServices.shared.signOut()
+                try AuthServices.shared.signOut()
+                GoogleSignInHelper.shared.reset() // ✅ now exists
+                isSignedIn = false
             } catch {
                 print("Logout failed:", error.localizedDescription)
             }
         }
     }
 }
+
+
