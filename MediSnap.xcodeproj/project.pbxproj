@@ -13,14 +13,10 @@
 		62912D9B2E7EE51900610AAA /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 62912D9A2E7EE51900610AAA /* FirebaseFirestore */; };
 		62912DA12E7EE91B00610AAA /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 62912DA02E7EE91B00610AAA /* GoogleSignIn */; };
 		62912DA32E7EE91B00610AAA /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 62912DA22E7EE91B00610AAA /* GoogleSignInSwift */; };
-		62912DA92E7EE9CB00610AAA /* GoogleSignInHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62912DA82E7EE9CA00610AAA /* GoogleSignInHelper.swift */; };
-		62912DAB2E7EEA1900610AAA /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62912DAA2E7EEA1900610AAA /* Utilities.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		62912D812E7EE09C00610AAA /* MediSnap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MediSnap.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		62912DA82E7EE9CA00610AAA /* GoogleSignInHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInHelper.swift; sourceTree = "<group>"; };
-		62912DAA2E7EEA1900610AAA /* Utilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -64,8 +60,6 @@
 		62912D782E7EE09C00610AAA = {
 			isa = PBXGroup;
 			children = (
-				62912DAA2E7EEA1900610AAA /* Utilities.swift */,
-				62912DA82E7EE9CA00610AAA /* GoogleSignInHelper.swift */,
 				62912D832E7EE09C00610AAA /* MediSnap */,
 				62912D822E7EE09C00610AAA /* Products */,
 			);
@@ -163,8 +157,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				62912DA92E7EE9CB00610AAA /* GoogleSignInHelper.swift in Sources */,
-				62912DAB2E7EEA1900610AAA /* Utilities.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
