@@ -17,10 +17,19 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
 @main
 struct MediSnapApp: App {
+    
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    
+    @State private var showAuthView: Bool = true
+    
     var body: some Scene {
+        
         WindowGroup {
-            ContentView()
+            if showAuthView{
+                AuthView(showAuthView: $showAuthView)
+            }else{
+                ContentView()
+            }
         }
     }
 }

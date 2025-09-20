@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>508083078968-lqbg0h8jotqao0o7biu0j7kvjcb6ood0.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.508083078968-lqbg0h8jotqao0o7biu0j7kvjcb6ood0</string>
+	<key>API_KEY</key>
+	<string>AIzaSyDF3GyXJZGixxDr6dkIM1X7wh5uqSRqYAA</string>
+	<key>GCM_SENDER_ID</key>
+	<string>508083078968</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.salmanmhaskar.MediSnap</string>
+	<key>PROJECT_ID</key>
+	<string>medisnap-a8bfd</string>
+	<key>STORAGE_BUCKET</key>
+	<string>medisnap-a8bfd.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:508083078968:ios:53d8129091834b38fb23cd</string>
+</dict>
+</plist>
