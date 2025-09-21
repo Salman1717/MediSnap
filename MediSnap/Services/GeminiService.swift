@@ -130,31 +130,37 @@ final class GeminiService : ObservableObject {
         let systemPrompt = """
         You are a medical safety information assistant. For the given medications, provide comprehensive safety information in JSON format.
         
-        Return a JSON object with:
-        1) medications: array of medication safety objects with fields:
-           - medicationName (string)
-           - commonSideEffects (array of strings): mild, common side effects
-           - seriousSideEffects (array of strings): severe side effects requiring medical attention
-           - precautions (array of strings): important precautions and warnings
-           - foodInteractions (array of strings): foods to avoid or take with
-           - drugInteractions (array of strings): other medications that may interact
-           - contraindications (array of strings): conditions where medication shouldn't be used
-           - whenToSeekHelp (array of strings): symptoms requiring immediate medical attention
-           - generalAdvice (array of strings): general tips for safe use
+        Return a JSON object with this EXACT structure:
+        {
+          "medications": [
+            {
+              "medicationName": "string",
+              "commonSideEffects": ["string1", "string2"],
+              "seriousSideEffects": ["string1", "string2"],
+              "precautions": ["string1", "string2"],
+              "foodInteractions": ["string1", "string2"],
+              "drugInteractions": ["string1", "string2"],
+              "contraindications": ["string1", "string2"],
+              "whenToSeekHelp": ["string1", "string2"],
+              "generalAdvice": ["string1", "string2"]
+            }
+          ],
+          "generalWarning": "Important disclaimer about consulting healthcare professionals"
+        }
         
-        2) generalWarning (string): Important disclaimer about consulting healthcare providers
-        
-        Provide accurate, evidence-based information. Include disclaimer about consulting healthcare professionals.
-        Return only valid JSON.
+        IMPORTANT: 
+        - Return ONLY valid JSON
+        - Use double quotes for strings
+        - Include at least 2-3 items for each array field
+        - If no information available, use empty array []
+        - Do not use markdown formatting or code blocks
+        - All array fields must exist even if empty
         """
         
         let prompt = """
         \(systemPrompt)
         
-        Medications to analyze:
-        \(medicationNames)
-        
-        Please provide comprehensive safety information for each medication.
+        Medications to analyze: \(medicationNames)
         """
         
         let response = try await model?.generateContent(prompt)
@@ -168,16 +174,125 @@ final class GeminiService : ObservableObject {
         print(text)
         print("============================")
         
-        guard let jsonData = firstJSONData(from: text) else {
+        // Try to parse JSON with better error handling
+        guard let jsonData = extractCleanJSON(from: text) else {
             throw NSError(domain: "GeminiService", code: 6, userInfo: [
-                NSLocalizedDescriptionKey: "Failed to extract JSON from AI response"
+                NSLocalizedDescriptionKey: "Failed to extract valid JSON from AI response: \(String(text.prefix(300)))..."
             ])
         }
         
         let decoder = JSONDecoder()
-        let safetyResponse = try decoder.decode(SafetyResponse.self, from: jsonData)
         
-        return safetyResponse
+        // Add better error handling for decoding
+        do {
+            let safetyResponse = try decoder.decode(SafetyResponse.self, from: jsonData)
+            
+            // Validate that we have at least one medication
+            guard !safetyResponse.medications.isEmpty else {
+                throw NSError(domain: "GeminiService", code: 7, userInfo: [
+                    NSLocalizedDescriptionKey: "No medication safety information found in response"
+                ])
+            }
+            
+            return safetyResponse
+            
+        } catch let decodingError as DecodingError {
+            print("=== DECODING ERROR ===")
+            print(decodingError)
+            print("=== RAW JSON DATA ===")
+            print(String(data: jsonData, encoding: .utf8) ?? "Could not convert to string")
+            print("====================")
+            
+            // Create a more descriptive error message
+            let errorMessage: String
+            switch decodingError {
+            case .keyNotFound(let key, _):
+                errorMessage = "Missing required field: \(key.stringValue)"
+            case .typeMismatch(let type, _):
+                errorMessage = "Type mismatch for expected type: \(type)"
+            case .valueNotFound(let type, _):
+                errorMessage = "Missing value for type: \(type)"
+            case .dataCorrupted(let context):
+                errorMessage = "Data corrupted: \(context.debugDescription)"
+            @unknown default:
+                errorMessage = "Unknown decoding error: \(decodingError.localizedDescription)"
+            }
+            
+            throw NSError(domain: "GeminiService", code: 8, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to parse safety information: \(errorMessage)"
+            ])
+        } catch {
+            throw NSError(domain: "GeminiService", code: 9, userInfo: [
+                NSLocalizedDescriptionKey: "Unexpected error parsing safety information: \(error.localizedDescription)"
+            ])
+        }
+    }
+
+    // MARK: - Helper method for better JSON extraction
+    // Add this helper method to your GeminiService class:
+
+    private func extractCleanJSON(from text: String) -> Data? {
+        print("=== SEARCHING FOR JSON IN TEXT ===")
+        print("Full response text:")
+        print(text)
+        print("========================")
+        
+        // Remove common markdown formatting
+        var cleanText = text
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Look for object start
+        guard let objectStart = cleanText.firstIndex(of: "{") else {
+            print("❌ No '{' found in text")
+            return nil
+        }
+        
+        // Find the matching closing brace by counting braces
+        var braceCount = 0
+        var objectEnd: String.Index?
+        
+        for index in cleanText[objectStart...].indices {
+            let char = cleanText[index]
+            if char == "{" {
+                braceCount += 1
+            } else if char == "}" {
+                braceCount -= 1
+                if braceCount == 0 {
+                    objectEnd = index
+                    break
+                }
+            }
+        }
+        
+        guard let end = objectEnd else {
+            print("❌ No matching '}' found")
+            return nil
+        }
+        
+        let jsonSubstring = cleanText[objectStart...end]
+        let jsonString = String(jsonSubstring).trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        print("=== FOUND JSON SUBSTRING ===")
+        print(jsonString)
+        print("============================")
+        
+        // Validate JSON before returning
+        guard let jsonData = jsonString.data(using: .utf8) else {
+            print("❌ Could not convert to UTF-8 data")
+            return nil
+        }
+        
+        // Try to parse as JSON to validate
+        do {
+            _ = try JSONSerialization.jsonObject(with: jsonData, options: [])
+            print("✅ JSON validation successful")
+            return jsonData
+        } catch {
+            print("❌ JSON validation failed: \(error)")
+            return nil
+        }
     }
     
     
