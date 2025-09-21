@@ -75,11 +75,12 @@ struct EditableMedicationsView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
-                .shadow(radius: 5)
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 1, y: 1)
             
             Text("Review and modify extracted medication details")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
         }
@@ -97,11 +98,12 @@ struct EditableMedicationsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Current Step")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.gray)
                     
                     Text(vm.currentStep.description)
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        .foregroundColor(.primary)
                 }
                 
                 Spacer()
@@ -148,16 +150,17 @@ struct EditableMedicationsView: View {
                 Text("Medications")
                     .font(.title2)
                     .fontWeight(.bold)
+                    .foregroundColor(.blue)
                 
                 Spacer()
                 
                 if !vm.medications.isEmpty {
                     Text("\(vm.medications.count) item\(vm.medications.count == 1 ? "" : "s")")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.blue)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.gray.opacity(0.1))
+                        .background(Color.blue.opacity(0.1))
                         .cornerRadius(8)
                 }
             }
@@ -182,11 +185,11 @@ struct EditableMedicationsView: View {
         VStack(spacing: 12) {
             Image(systemName: "pills")
                 .font(.system(size: 40))
-                .foregroundColor(.gray.opacity(0.5))
+                .foregroundColor(.gray.opacity(0.6))
             
             Text("No medications extracted")
                 .font(.headline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.primary)
             
             Text("Please go back and capture a prescription image")
                 .font(.caption)
@@ -204,7 +207,7 @@ struct EditableMedicationsView: View {
                 Text("Medication Name")
                     .font(.caption)
                     .fontWeight(.medium)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.blue.opacity(0.8))
                 
                 TextField("Enter medication name", text: med.name)
                     .textFieldStyle(CustomTextFieldStyle())
@@ -217,7 +220,7 @@ struct EditableMedicationsView: View {
                     Text("Dosage")
                         .font(.caption)
                         .fontWeight(.medium)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.blue.opacity(0.8))
                     
                     TextField("e.g., 10mg", text: Binding(
                         get: { med.wrappedValue.dosage ?? "" },
@@ -230,8 +233,7 @@ struct EditableMedicationsView: View {
                     Text("Frequency")
                         .font(.caption)
                         .fontWeight(.medium)
-                        .foregroundColor(.secondary)
-                    
+                        .foregroundColor(.blue.opacity(0.8))
                     TextField("e.g., Twice daily", text: Binding(
                         get: { med.wrappedValue.frequency ?? "" },
                         set: { med.wrappedValue.frequency = $0.isEmpty ? nil : $0 }
@@ -246,8 +248,7 @@ struct EditableMedicationsView: View {
                     Text("Duration")
                         .font(.caption)
                         .fontWeight(.medium)
-                        .foregroundColor(.secondary)
-                    
+                        .foregroundColor(.blue.opacity(0.8))
                     TextField("e.g., 7 days", text: Binding(
                         get: { med.wrappedValue.duration ?? "" },
                         set: { med.wrappedValue.duration = $0.isEmpty ? nil : $0 }
@@ -259,7 +260,7 @@ struct EditableMedicationsView: View {
                     Text("Route")
                         .font(.caption)
                         .fontWeight(.medium)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.blue.opacity(0.8))
                     
                     TextField("e.g., Oral", text: Binding(
                         get: { med.wrappedValue.route ?? "" },
@@ -275,19 +276,19 @@ struct EditableMedicationsView: View {
                     Text("Original OCR Text")
                         .font(.caption2)
                         .fontWeight(.medium)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.blue.opacity(0.8))
                     
                     Text(original)
                         .font(.caption2)
-                        .foregroundColor(.gray)
+                        .foregroundColor(.black)
                         .padding(8)
-                        .background(Color.gray.opacity(0.1))
+                        .background(Color.blue.opacity(0.1))
                         .cornerRadius(6)
                 }
             }
         }
         .padding(12)
-        .background(Color.gray.opacity(0.05))
+        .background(Color.blue.opacity(0.05))
         .cornerRadius(12)
     }
     
@@ -297,6 +298,7 @@ struct EditableMedicationsView: View {
             Text("Actions")
                 .font(.title2)
                 .fontWeight(.bold)
+                .foregroundColor(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             // Primary Action: Generate Schedule
@@ -347,6 +349,7 @@ struct EditableMedicationsView: View {
                     Text("Next Steps")
                         .font(.headline)
                         .fontWeight(.semibold)
+                        .foregroundColor(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     HStack(spacing: 12) {
@@ -448,7 +451,7 @@ struct EditableMedicationsView: View {
                 
                 if vm.currentStep != .idle {
                     Text(vm.currentStep.description)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(.white.opacity(0.9))
                         .font(.subheadline)
                 }
             }
@@ -464,6 +467,7 @@ struct EditableMedicationsView: View {
 struct CustomTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
+            .foregroundColor(.black)
             .padding(12)
             .background(Color.white)
             .cornerRadius(8)

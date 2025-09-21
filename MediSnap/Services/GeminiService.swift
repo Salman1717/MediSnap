@@ -8,15 +8,16 @@
 import FirebaseAI
 import Foundation
 import Combine
+import UIKit
 
 @MainActor
 final class GeminiService : ObservableObject {
     static let shared = GeminiService()
     @Published var medicationSchedule: [MedicationSchedule] = []
-
+    
     
     private let ai: FirebaseAI
-    var model: GenerativeModel? // ✅ Make model accessible
+    var model: GenerativeModel?
     
     private init() {
         self.ai = FirebaseAI.firebaseAI(backend: .googleAI())
@@ -34,28 +35,28 @@ final class GeminiService : ObservableObject {
             2) date: prescription date in YYYY-MM-DD format if available, else null.
             Return JSON only.
         """
-
+        
         let prompt = "\(systemPrompt)\n\nPrescription text:\n\(prescriptionText)"
-
+        
         let response = try await model?.generateContent(prompt)
         let text = response?.text ?? ""
-
+        
         guard let jsonData = firstJSONData(from: text) else {
             throw NSError(domain: "GeminiService", code: 3, userInfo: [
                 NSLocalizedDescriptionKey: "Model output did not contain valid JSON. Response preview: \(String(text.prefix(500)))"
             ])
         }
-
+        
         // Decode JSON object
         struct Response: Codable {
             var medications: [Medication]
             var date: String?
         }
-
+        
         let decoded = try JSONDecoder().decode(Response.self, from: jsonData)
         return (decoded.medications, decoded.date)
     }
-
+    
     func generateScheduleWithGemini(prescription: Prescription) async throws {
         let systemPrompt = """
         You are a scheduling assistant. Given the following prescription medications,
@@ -65,7 +66,7 @@ final class GeminiService : ObservableObject {
         
         Return ONLY a valid JSON array, no markdown formatting or extra text.
         """
-
+        
         let medsText = prescription.medications.map { med in
             """
             name: \(med.name)
@@ -74,32 +75,32 @@ final class GeminiService : ObservableObject {
             duration: \(med.duration ?? "")
             """
         }.joined(separator: "\n")
-
+        
         let prompt = "\(systemPrompt)\n\nMedications:\n\(medsText)\nStart date: \(ISO8601DateFormatter().string(from: prescription.date))"
-
+        
         let response = try await model?.generateContent(prompt)
         guard let text = response?.text else { return }
         
         print("=== GEMINI SCHEDULE RESPONSE ===")
         print(text)
         print("===============================")
-
+        
         // ✅ Extract JSON array from response (handle markdown formatting)
         guard let jsonData = firstJSONArrayData(from: text) else {
             throw NSError(domain: "GeminiService", code: 4, userInfo: [
                 NSLocalizedDescriptionKey: "Failed to extract JSON array from response: \(String(text.prefix(500)))"
             ])
         }
-
+        
         // ✅ Parse top-level array directly
         struct GeminiMedSchedule: Codable {
             var medName: String
             var reminders: [String]
         }
-
+        
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-
+        
         // Wrap in try-catch to safely decode
         let decodedArray: [GeminiMedSchedule]
         do {
@@ -108,9 +109,9 @@ final class GeminiService : ObservableObject {
             print("Failed to decode Gemini schedule as array: \(error)")
             throw error
         }
-
+        
         var schedule: [MedicationSchedule] = []
-
+        
         for s in decodedArray {
             if let med = prescription.medications.first(where: { $0.name == s.medName }) {
                 // Convert ISO strings to Date, skip invalid/empty
@@ -118,10 +119,10 @@ final class GeminiService : ObservableObject {
                 schedule.append(MedicationSchedule(med: med, reminders: reminders))
             }
         }
-
+        
         self.medicationSchedule = schedule
     }
-
+    
     // MARK: - Get Safety Information
     func getSafetyInformation(for medications: [Medication]) async throws -> SafetyResponse {
         let medicationNames = medications.map { $0.name }.joined(separator: ", ")
@@ -178,9 +179,9 @@ final class GeminiService : ObservableObject {
         
         return safetyResponse
     }
-
     
-    // ✅ New method to extract JSON array (handles markdown formatting)
+    
+    
     private func firstJSONArrayData(from text: String) -> Data? {
         print("=== SEARCHING FOR JSON ARRAY IN TEXT ===")
         print("Full response text:")
@@ -275,3 +276,78 @@ final class GeminiService : ObservableObject {
         return cleaned.data(using: .utf8)
     }
 }
+
+// MARK: - Extended GeminiService for Radiology
+// MARK: - Extended GeminiService for Radiology
+extension GeminiService {
+    
+    func analyzeRadiologyReport(image: UIImage) async throws -> RadiologyReport {
+        let systemPrompt = """
+        You are a medical AI assistant specialized in analyzing radiology reports and medical images. 
+        Analyze the provided radiology report image and return a JSON response with this exact structure:
+        
+        {
+          "summary": "1-2 sentence summary of key findings",
+          "findings": [
+            {
+              "name": "Finding name",
+              "value": "Description of the finding",
+              "significance": "Clinical significance",
+              "suggestedSeverity": "normal|moderate|critical"
+            }
+          ],
+          "recommendedSpecialties": ["specialty1", "specialty2"],
+          "precautions": ["precaution1", "precaution2"],
+          "nextSteps": ["step1", "step2"],
+          "confidence": 0.85,
+          "rawModelText": "Brief explanation of analysis approach",
+          "severity": "normal|moderate|critical"
+        }
+        
+        For recommended specialties, use these standard terms:
+        - Cardiology, Pulmonology, Neurology, Orthopedics, Gastroenterology, Urology, Oncology, Emergency Medicine, Internal Medicine, Radiology
+        
+        Guidelines:
+        1. Extract all visible findings from the radiology report
+        2. Assess clinical significance of each finding
+        3. Recommend appropriate medical specialties based on findings
+        4. Suggest reasonable precautions and next steps
+        5. Provide confidence score based on image quality and clarity
+        6. Set overall severity based on most critical finding
+        7. Use "critical" severity only for findings requiring immediate medical attention
+        8. Use "moderate" for findings that need follow-up but aren't emergent
+        9. Use "normal" for normal or insignificant findings
+        
+        Return only valid JSON, no additional text or markdown formatting.
+        """
+        
+        // FirebaseAI can handle UIImage directly - no need to convert to Data
+        // Generate content with UIImage and text prompt
+        let response = try await model?.generateContent(image, systemPrompt)
+        
+        guard let responseText = response?.text else {
+            throw AnalysisError.invalidResponse
+        }
+        
+        print("=== RADIOLOGY ANALYSIS RESPONSE ===")
+        print(responseText)
+        print("===================================")
+        
+        // Extract JSON from response
+        guard let jsonData = firstJSONData(from: responseText) else {
+            throw AnalysisError.invalidJSON
+        }
+        
+        let decoder = JSONDecoder()
+        let aiResponse = try decoder.decode(AIRadiologyResponse.self, from: jsonData)
+        
+        // Create RadiologyReport with generated UUID and current timestamp
+        let report = RadiologyReport(from: aiResponse, severity: aiResponse.severity)
+        
+        return report
+    }
+}
+
+
+
+

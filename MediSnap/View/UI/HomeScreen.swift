@@ -67,6 +67,15 @@ struct HomeScreen: View {
                                 .foregroundColor(.white)
                         }
                         .glassButton()
+                        
+                        // View Schedule Button
+                        NavigationLink(destination: RadiologyAnalysisView().navigationBarBackButtonHidden())
+                        {
+                            Text("Scan Radiology Reports")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        }
+                        .glassButton()
                     }
                     .padding(.horizontal, 24)
                     

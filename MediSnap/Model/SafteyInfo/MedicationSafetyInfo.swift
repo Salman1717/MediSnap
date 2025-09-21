@@ -7,7 +7,7 @@
 import Foundation
 
 struct MedicationSafetyInfo: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     let medicationName: String
     let commonSideEffects: [String]
     let seriousSideEffects: [String]

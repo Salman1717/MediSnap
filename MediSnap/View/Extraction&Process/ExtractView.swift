@@ -154,7 +154,7 @@ struct ExtractView: View {
                 LoadingIndicator(
                     animation: .doubleHelix,
                     color: .blue,
-                    size: .medium,
+                    size: .large,
                     speed: .fast
                 )
                 
