@@ -3,8 +3,8 @@
 > Built for **Hack2k Hackathon** sponsored by **GDC Cloud Mumbai**  
 
 ## 👥 Team  
-- **Aaseem Mhaskar**  : @aaseem22
-- **Salman Mhaskar**  : @Salman1717
+- **Aaseem Mhaskar** : [@aaseem22](https://github.com/aaseem22)  
+- **Salman Mhaskar** : [@Salman1717](https://github.com/Salman1717)  
 
 ---
 
