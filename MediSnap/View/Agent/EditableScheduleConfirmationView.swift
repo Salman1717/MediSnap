@@ -5,14 +5,19 @@ struct EditableScheduleConfirmationView: View {
     @ObservedObject var geminiService = GeminiService.shared
     @Environment(\.presentationMode) var presentationMode
     
-    @State private var isSaving = false
-    @State private var isAddingToCalendar = false
     @State private var showSuccessAlert = false
-    @State private var showCalendarSuccessAlert = false
+    @State private var showStepProgress = false
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
+                // Step Progress Indicator (when flow is running)
+                if vm.isLoading && vm.currentStep != .idle {
+                    stepProgressView
+                        .padding()
+                        .background(Color(.systemGray6))
+                }
+                
                 if geminiService.medicationSchedule.isEmpty {
                     // Empty state
                     VStack(spacing: 16) {
@@ -47,72 +52,110 @@ struct EditableScheduleConfirmationView: View {
                     
                     // Action buttons
                     VStack(spacing: 12) {
-                        HStack(spacing: 12) {
-                            Button(action: {
-                                Task {
-                                    isSaving = true
-                                    // This will now save schedule AND safety information automatically
-                                    await vm.saveScheduleToFirestore()
-                                    isSaving = false
-                                    if vm.errorMessage == nil {
-                                        showSuccessAlert = true
-                                    }
-                                }
-                            }) {
-                                HStack {
-                                    if isSaving {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                    } else {
-                                        Image(systemName: "checkmark.circle.fill")
-                                    }
-                                    Text("Save Schedule & Safety Info")
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(isSaving)
-                        }
-                        
+                        // Primary Action: Complete Flow Button
                         Button(action: {
                             Task {
-                                isAddingToCalendar = true
-                                await vm.addScheduleToGoogleCalendar()
-                                isAddingToCalendar = false
+                                await vm.executeCompleteFlow()
                                 if vm.errorMessage == nil {
-                                    showCalendarSuccessAlert = true
+                                    showSuccessAlert = true
                                 }
                             }
                         }) {
                             HStack {
-                                if isAddingToCalendar {
+                                if vm.isLoading && vm.currentStep != .idle {
                                     ProgressView()
                                         .scaleEffect(0.8)
+                                    Text(vm.currentStep.description)
                                 } else {
-                                    Image(systemName: "calendar.badge.plus")
+                                    Image(systemName: "checkmark.seal.fill")
+                                    Text("Complete All Steps")
                                 }
-                                Text("Add to Google Calendar")
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(isAddingToCalendar)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(vm.isLoading)
                         
-                        // ✅ Updated Safety Information Button
-                        Button(action: {
-                            vm.showMedicationSafetyInfo()
-                        }) {
-                            HStack {
-                                Image(systemName: "cross.circle.fill")
-                                Text("View Safety Information")
+                        // Divider
+                        Text("Or do individual steps:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        // Individual action buttons (secondary actions)
+                        HStack(spacing: 8) {
+                            Button(action: {
+                                Task {
+                                    await vm.saveScheduleOnly()
+                                }
+                            }) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: vm.isStepCompleted(.savingAll) ? "checkmark.circle.fill" : "square.and.arrow.down")
+                                        .foregroundColor(vm.isStepCompleted(.savingAll) ? .green : .blue)
+                                    Text("Save Schedule")
+                                        .font(.caption)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                            .buttonStyle(.bordered)
+                            .disabled(vm.isLoading)
+                            
+                            Button(action: {
+                                Task {
+                                    await vm.addToCalendarOnly()
+                                }
+                            }) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: vm.isStepCompleted(.addingToCalendar) ? "checkmark.circle.fill" : "calendar.badge.plus")
+                                        .foregroundColor(vm.isStepCompleted(.addingToCalendar) ? .green : .blue)
+                                    Text("Add Calendar")
+                                        .font(.caption)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(vm.isLoading)
+                            
+                            Button(action: {
+                                Task {
+                                    await vm.generateSafetyInfoOnly()
+                                }
+                            }) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: vm.isStepCompleted(.generatingSafetyInfo) ? "checkmark.circle.fill" : "shield.fill")
+                                        .foregroundColor(vm.isStepCompleted(.generatingSafetyInfo) ? .green : .orange)
+                                    Text("Safety Info")
+                                        .font(.caption)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(vm.isLoading)
                         }
-                        .buttonStyle(.bordered)
-                        .foregroundColor(.orange)
+                        
+                        // Note about viewing safety information
+                        if vm.isStepCompleted(.generatingSafetyInfo) || vm.currentStep == .completed {
+                            VStack(spacing: 8) {
+                                Divider()
+                                
+                                HStack {
+                                    Image(systemName: "info.circle.fill")
+                                        .foregroundColor(.blue)
+                                    
+                                    Text("Safety information has been generated. View it in the prescription history after completion.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.leading)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                        }
                     }
                     .padding()
                     .background(Color(.systemGroupedBackground))
@@ -134,33 +177,104 @@ struct EditableScheduleConfirmationView: View {
                         presentationMode.wrappedValue.dismiss()
                     }
                 }
+                
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Reset") {
+                        vm.resetFlow()
+                    }
+                    .font(.caption)
+                    .disabled(vm.isLoading)
+                }
             }
         }
-        .alert("Schedule & Safety Info Saved!", isPresented: $showSuccessAlert) {
-            Button("View Safety Information") {
-                vm.showSafetyInformation = true
+        .alert("All Steps Completed!", isPresented: $showSuccessAlert) {
+            Button("View in History") {
+                // Navigate to prescription history where they can view detailed safety info
+                presentationMode.wrappedValue.dismiss()
             }
             Button("Done") {
                 presentationMode.wrappedValue.dismiss()
             }
         } message: {
-            Text("Your medication schedule and safety information have been saved successfully.")
+            Text("Your medication schedule has been saved, added to calendar, and safety information has been generated. View detailed safety information in your prescription history.")
         }
-        .alert("Added to Calendar!", isPresented: $showCalendarSuccessAlert) {
-            Button("View Safety Information") {
-                vm.showSafetyInformation = true
+    }
+    
+    // Step Progress View
+    private var stepProgressView: some View {
+        VStack(spacing: 12) {
+            Text(vm.currentStep.description)
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            HStack(spacing: 8) {
+                stepIndicator(.generatingSchedule, title: "Schedule")
+                
+                progressArrow(vm.isStepCompleted(.generatingSchedule))
+                
+                stepIndicator(.addingToCalendar, title: "Calendar")
+                
+                progressArrow(vm.isStepCompleted(.addingToCalendar))
+                
+                stepIndicator(.generatingSafetyInfo, title: "Safety")
+                
+                progressArrow(vm.isStepCompleted(.generatingSafetyInfo))
+                
+                stepIndicator(.savingAll, title: "Save")
             }
-            Button("Done") { }
-        } message: {
-            Text("Your medication reminders have been added to Google Calendar successfully. Would you like to view important safety information about your medications?")
+            
+            ProgressView(value: progressValue, total: 4.0)
+                .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                .animation(.easeInOut, value: progressValue)
         }
-        // ✅ Updated sheet to pass prescription ID for cached loading
-        .sheet(isPresented: $vm.showSafetyInformation) {
-            MedicationSafetyView(
-                medications: vm.medications,
-                prescriptionId: vm.currentPrescriptionId
-            )
+        .padding()
+        .background(Color.blue.opacity(0.1))
+        .cornerRadius(12)
+    }
+    
+    private func stepIndicator(_ step: ExtractViewModel.ProcessingStep, title: String) -> some View {
+        VStack(spacing: 4) {
+            Circle()
+                .fill(stepColor(step))
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Group {
+                        if vm.isStepCompleted(step) {
+                            Image(systemName: "checkmark")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                        } else if vm.currentStep == step {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                        }
+                    }
+                )
+            
+            Text(title)
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
+    }
+    
+    private func progressArrow(_ completed: Bool) -> some View {
+        Image(systemName: "arrow.right")
+            .font(.caption2)
+            .foregroundColor(completed ? .green : .gray)
+    }
+    
+    private func stepColor(_ step: ExtractViewModel.ProcessingStep) -> Color {
+        if vm.isStepCompleted(step) {
+            return .green
+        } else if vm.currentStep == step {
+            return .blue
+        } else {
+            return .gray
+        }
+    }
+    
+    private var progressValue: Double {
+        let completedCount = vm.completedSteps.count
+        return Double(completedCount)
     }
 }
 

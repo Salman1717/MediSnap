@@ -3,11 +3,15 @@ import SwiftUI
 struct EditableMedicationsView: View {
     @ObservedObject var vm: ExtractViewModel
     
-    @State private var isSaving = false
     @State private var showScheduleConfirmation = false
     
     var body: some View {
         VStack(spacing: 12) {
+            // Step indicator for current flow state
+            if vm.currentStep != .idle {
+                stepStatusView
+            }
+            
             List {
                 if vm.medications.isEmpty {
                     Text("No medications extracted").foregroundColor(.secondary)
@@ -51,34 +55,83 @@ struct EditableMedicationsView: View {
             }
             .listStyle(.plain)
             
-            HStack(spacing: 12) {
+            // Action Buttons
+            VStack(spacing: 12) {
+                // Primary Action: Generate Schedule (Step 1)
                 Button(action: {
                     Task {
-                        isSaving = true
-                        // ✅ Save prescription and generate schedule
                         await vm.savePrescriptionAndGenerateSchedule()
-                        isSaving = false
                         
-                        // ✅ Show schedule confirmation if schedule was generated
-                        if !GeminiService.shared.medicationSchedule.isEmpty {
+                        // Show schedule confirmation if schedule was generated
+                        if !GeminiService.shared.medicationSchedule.isEmpty && vm.errorMessage == nil {
                             showScheduleConfirmation = true
                         }
                     }
                 }) {
-                    if isSaving {
-                        HStack {
+                    HStack {
+                        if vm.isLoading && (vm.currentStep == .savingPrescription || vm.currentStep == .generatingSchedule) {
                             ProgressView()
                                 .scaleEffect(0.8)
-                            Text("Generating Schedule...")
+                            Text(vm.currentStep.description)
+                        } else if vm.isStepCompleted(.generatingSchedule) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Schedule Generated")
+                        } else {
+                            Image(systemName: "calendar.badge.plus")
+                            Text("Generate Schedule")
                         }
-                        .padding(.vertical, 8)
-                    } else {
-                        Text("Save & Generate Schedule")
-                            .frame(maxWidth: .infinity)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(vm.isLoading || vm.medications.isEmpty)
+                
+                // Secondary Actions (only show after schedule is generated)
+                if vm.isStepCompleted(.generatingSchedule) {
+                    VStack(spacing: 8) {
+                        Text("Next Steps:")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        
+                        HStack(spacing: 8) {
+                            Button(action: {
+                                showScheduleConfirmation = true
+                            }) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "pencil.and.outline")
+                                    Text("Edit Schedule")
+                                        .font(.caption)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.bordered)
+                            
+                            Button(action: {
+                                Task {
+                                    await vm.executeCompleteFlow()
+                                }
+                            }) {
+                                VStack(spacing: 4) {
+                                    if vm.isLoading && vm.currentStep != .idle && vm.currentStep != .generatingSchedule {
+                                        ProgressView()
+                                            .scaleEffect(0.6)
+                                    } else {
+                                        Image(systemName: "checkmark.seal.fill")
+                                    }
+                                    Text("Complete All")
+                                        .font(.caption)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(vm.isLoading)
+                        }
                     }
                 }
-                .disabled(isSaving || vm.medications.isEmpty)
-                .buttonStyle(.borderedProminent)
             }
             .padding()
             
@@ -93,5 +146,34 @@ struct EditableMedicationsView: View {
         .sheet(isPresented: $showScheduleConfirmation) {
             EditableScheduleConfirmationView(vm: vm)
         }
+    }
+    
+    // Step Status View
+    private var stepStatusView: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "info.circle.fill")
+                .foregroundColor(.blue)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Current Step")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text(vm.currentStep.description)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            
+            Spacer()
+            
+            if vm.isLoading {
+                ProgressView()
+                    .scaleEffect(0.8)
+            }
+        }
+        .padding()
+        .background(Color.blue.opacity(0.1))
+        .cornerRadius(8)
+        .padding(.horizontal)
     }
 }

@@ -17,12 +17,40 @@ class ExtractViewModel: ObservableObject {
     @Published var showSafetyInformation: Bool = false
     @Published var prescriptionStatus: PrescriptionStatus = .extracted
     
+    // Flow tracking
+    @Published var currentStep: ProcessingStep = .idle
+    @Published var completedSteps: Set<ProcessingStep> = []
+    
     var currentPrescriptionId: String?
+    
+    enum ProcessingStep {
+        case idle
+        case savingPrescription
+        case generatingSchedule
+        case addingToCalendar
+        case generatingSafetyInfo
+        case savingAll
+        case completed
+        
+        var description: String {
+            switch self {
+            case .idle: return "Ready"
+            case .savingPrescription: return "Saving Prescription..."
+            case .generatingSchedule: return "Creating Schedule..."
+            case .addingToCalendar: return "Adding to Google Calendar..."
+            case .generatingSafetyInfo: return "Generating Safety Information..."
+            case .savingAll: return "Saving Everything..."
+            case .completed: return "Completed"
+            }
+        }
+    }
     
     // MARK: - Process image (OCR + extraction)
     func processImage(_ image: UIImage) async {
         isLoading = true
         errorMessage = nil
+        currentStep = .idle
+        completedSteps.removeAll()
         
         // Reset previous data
         ocrText = ""
@@ -54,7 +82,7 @@ class ExtractViewModel: ObservableObject {
         isLoading = false
     }
     
-    // MARK: - Complete prescription processing workflow
+    // MARK: - Step 1: Save prescription and generate schedule
     func savePrescriptionAndGenerateSchedule() async {
         guard !medications.isEmpty else {
             errorMessage = "No medications to save."
@@ -63,6 +91,7 @@ class ExtractViewModel: ObservableObject {
         
         isLoading = true
         errorMessage = nil
+        currentStep = .savingPrescription
         
         let date = prescriptionDate ?? Date()
         
@@ -76,28 +105,113 @@ class ExtractViewModel: ObservableObject {
             let pres = Prescription(id: UUID().uuidString, date: date, medications: medications)
             try await FirebaseService.shared.savePrescription(pres)
             currentPrescriptionId = pres.id
+            completedSteps.insert(.savingPrescription)
             
             // 2️⃣ Generate schedule using Gemini
+            currentStep = .generatingSchedule
             try await GeminiService.shared.generateScheduleWithGemini(prescription: pres)
+            completedSteps.insert(.generatingSchedule)
             
-            // Clear any previous error messages if successful
+            currentStep = .completed
             errorMessage = nil
             
         } catch {
             errorMessage = "Failed to save prescription or generate schedule: \(error.localizedDescription)"
+            currentStep = .idle
         }
         
         isLoading = false
     }
     
-    // MARK: - Save schedule to Firestore
-    func saveScheduleToFirestore() async {
+    // MARK: - Complete Sequential Flow: Schedule → Calendar → Safety → Save
+    func executeCompleteFlow() async {
         guard let presId = currentPrescriptionId else {
             errorMessage = "No prescription ID available."
             return
         }
         
         isLoading = true
+        errorMessage = nil
+        
+        do {
+            // Step 1: Ensure schedule is ready (should already be done)
+            let validSchedules = GeminiService.shared.medicationSchedule.filter { !$0.reminders.isEmpty }
+            guard !validSchedules.isEmpty else {
+                errorMessage = "No valid schedules available."
+                isLoading = false
+                return
+            }
+            
+            // Step 2: Add to Google Calendar
+            currentStep = .addingToCalendar
+            let eventIds = try await GoogleCalendarService.shared.addMedicationScheduleToCalendar(schedule: validSchedules)
+            completedSteps.insert(.addingToCalendar)
+            
+            // Step 3: Generate Safety Information
+            currentStep = .generatingSafetyInfo
+            let safetyResponse = try await GeminiService.shared.getSafetyInformation(for: medications)
+            completedSteps.insert(.generatingSafetyInfo)
+            
+            // Step 4: Save Everything Together
+            currentStep = .savingAll
+            
+            // Save schedule
+            try await FirebaseService.shared.saveSchedule(
+                prescriptionId: presId,
+                schedule: validSchedules
+            )
+            
+            // Save calendar event IDs
+            let eventMap = Dictionary(uniqueKeysWithValues: eventIds.enumerated().map { (index, id) in
+                ("event_\(index)", [id])
+            })
+            try await FirebaseService.shared.saveScheduleEventIds(
+                prescriptionId: presId,
+                eventMap: eventMap
+            )
+            
+            // Save safety information
+            try await FirebaseService.shared.saveSafetyInformation(
+                prescriptionId: presId,
+                safetyResponse: safetyResponse
+            )
+            
+            // Update final status
+            try await FirebaseService.shared.updatePrescriptionStatus(
+                prescriptionId: presId,
+                status: .completed
+            )
+            
+            completedSteps.insert(.savingAll)
+            currentStep = .completed
+            prescriptionStatus = .completed
+            
+            print("✅ Complete flow executed successfully:")
+            print("   - Schedule created and saved")
+            print("   - \(eventIds.count) calendar events added")
+            print("   - Safety information generated and saved")
+            print("   - All data persisted to Firestore")
+            
+        } catch {
+            errorMessage = "Failed to complete flow: \(error.localizedDescription)"
+            currentStep = .idle
+            print("❌ Flow failed at step: \(currentStep)")
+        }
+        
+        isLoading = false
+    }
+    
+    // MARK: - Individual step methods (for manual execution if needed)
+    
+    // Only save schedule (without safety info)
+    func saveScheduleOnly() async {
+        guard let presId = currentPrescriptionId else {
+            errorMessage = "No prescription ID available."
+            return
+        }
+        
+        isLoading = true
+        currentStep = .savingAll
         
         let validSchedules = GeminiService.shared.medicationSchedule.filter { !$0.reminders.isEmpty }
         
@@ -108,49 +222,47 @@ class ExtractViewModel: ObservableObject {
         }
         
         do {
-            // Save schedule
             try await FirebaseService.shared.saveSchedule(
                 prescriptionId: presId,
                 schedule: validSchedules
             )
             
-            // Update status
             try await FirebaseService.shared.updatePrescriptionStatus(
                 prescriptionId: presId,
                 status: .scheduled
             )
             
-            // 🆕 AUTOMATICALLY GENERATE AND SAVE SAFETY INFORMATION
-            try await generateAndSaveSafetyInformation()
-            
+            completedSteps.insert(.savingAll)
+            currentStep = .completed
             errorMessage = nil
+            
         } catch {
             errorMessage = "Failed to save schedule: \(error.localizedDescription)"
+            currentStep = .idle
         }
         
         isLoading = false
     }
     
-    // MARK: - Add schedule to Google Calendar
-    func addScheduleToGoogleCalendar() async {
+    // Only add to calendar
+    func addToCalendarOnly() async {
         guard let presId = currentPrescriptionId else {
             errorMessage = "No prescription ID available."
             return
         }
         
         let schedule = GeminiService.shared.medicationSchedule
-        
         guard !schedule.isEmpty else {
             errorMessage = "No schedule available to add to calendar."
             return
         }
         
         isLoading = true
+        currentStep = .addingToCalendar
         
         do {
             let eventIds = try await GoogleCalendarService.shared.addMedicationScheduleToCalendar(schedule: schedule)
             
-            // Save event IDs to Firestore
             let eventMap = Dictionary(uniqueKeysWithValues: eventIds.enumerated().map { (index, id) in
                 ("event_\(index)", [id])
             })
@@ -160,80 +272,58 @@ class ExtractViewModel: ObservableObject {
                 eventMap: eventMap
             )
             
-            // Update status
             try await FirebaseService.shared.updatePrescriptionStatus(
                 prescriptionId: presId,
                 status: .calendarAdded
             )
             
+            completedSteps.insert(.addingToCalendar)
+            currentStep = .completed
             errorMessage = nil
-            print("Successfully added \(eventIds.count) events to Google Calendar")
             
         } catch {
             errorMessage = "Failed to add schedule to Google Calendar: \(error.localizedDescription)"
+            currentStep = .idle
         }
         
         isLoading = false
     }
     
-    // 🆕 NEW: Generate and save safety information
-    private func generateAndSaveSafetyInformation() async throws {
-        guard let presId = currentPrescriptionId else {
-            throw NSError(domain: "ExtractViewModel", code: 400, userInfo: [NSLocalizedDescriptionKey: "No prescription ID available"])
-        }
-        
-        guard !medications.isEmpty else {
-            throw NSError(domain: "ExtractViewModel", code: 400, userInfo: [NSLocalizedDescriptionKey: "No medications available for safety analysis"])
-        }
-        
-        // Generate safety information using Gemini
-        let safetyResponse = try await GeminiService.shared.getSafetyInformation(for: medications)
-        
-        // Save to Firestore
-        try await FirebaseService.shared.saveSafetyInformation(
-            prescriptionId: presId,
-            safetyResponse: safetyResponse
-        )
-        
-        // Update status
-        try await FirebaseService.shared.updatePrescriptionStatus(
-            prescriptionId: presId,
-            status: .safetyAnalyzed
-        )
-        
-        print("Safety information generated and saved successfully")
-    }
-    
-    // 🆕 NEW: Complete all processing workflow
-    func completeAllProcessing() async {
+    // Only generate safety info
+    func generateSafetyInfoOnly() async {
         guard let presId = currentPrescriptionId else {
             errorMessage = "No prescription ID available."
             return
         }
         
+        guard !medications.isEmpty else {
+            errorMessage = "No medications available for safety analysis."
+            return
+        }
+        
         isLoading = true
-        errorMessage = nil
+        currentStep = .generatingSafetyInfo
         
         do {
-            // 1️⃣ Save schedule if not already saved
-            if prescriptionStatus.rawValue == "extracted" {
-                await saveScheduleToFirestore()
-                if errorMessage != nil { return } // Exit if error occurred
-            }
+            let safetyResponse = try await GeminiService.shared.getSafetyInformation(for: medications)
             
-            // 2️⃣ Add to calendar if requested
-            // This is optional - you might want to make this based on user preference
-            
-            // 3️⃣ Mark as completed
-            try await FirebaseService.shared.updatePrescriptionStatus(
+            try await FirebaseService.shared.saveSafetyInformation(
                 prescriptionId: presId,
-                status: .completed
+                safetyResponse: safetyResponse
             )
             
-            prescriptionStatus = .completed
+            try await FirebaseService.shared.updatePrescriptionStatus(
+                prescriptionId: presId,
+                status: .safetyAnalyzed
+            )
+            
+            completedSteps.insert(.generatingSafetyInfo)
+            currentStep = .completed
+            errorMessage = nil
             
         } catch {
-            errorMessage = "Failed to complete processing: \(error.localizedDescription)"
+            errorMessage = "Failed to generate safety information: \(error.localizedDescription)"
+            currentStep = .idle
         }
         
         isLoading = false
@@ -244,7 +334,7 @@ class ExtractViewModel: ObservableObject {
         showSafetyInformation = true
     }
     
-    // 🆕 NEW: Load existing safety information from Firestore
+    // Load existing safety information from Firestore
     func loadSafetyInformation() async -> SafetyResponse? {
         guard let presId = currentPrescriptionId else { return nil }
         
@@ -254,6 +344,18 @@ class ExtractViewModel: ObservableObject {
             print("Failed to load safety information: \(error.localizedDescription)")
             return nil
         }
+    }
+    
+    // Reset flow state
+    func resetFlow() {
+        currentStep = .idle
+        completedSteps.removeAll()
+        errorMessage = nil
+    }
+    
+    // Helper to check if a step is completed
+    func isStepCompleted(_ step: ProcessingStep) -> Bool {
+        return completedSteps.contains(step)
     }
     
     // Helper parsers

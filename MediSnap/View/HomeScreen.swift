@@ -8,7 +8,7 @@ struct HomeScreen: View {
             endPoint: .bottomTrailing
         )
     }
-
+    
     var body: some View {
         NavigationView {
             ZStack {
@@ -17,7 +17,18 @@ struct HomeScreen: View {
                     .ignoresSafeArea()
                 
                 VStack(spacing: 40) {
-                    
+                    HStack {
+                        Spacer() // Pushes button to the right
+                        NavigationLink(destination: ProfileView()) {
+                            Image(systemName: "person.circle.fill")
+                                .resizable()
+                                .frame(width: 40, height: 40)
+                                .foregroundColor(.white)
+                                .shadow(radius: 4)
+                        }
+                        .padding(.trailing, 16) // distance from right edge
+                        .padding(.top, 16)     // distance from top edge
+                    }
                     // App Title
                     Text("MediSnap")
                         .font(.largeTitle)
@@ -35,10 +46,10 @@ struct HomeScreen: View {
                         .padding(.horizontal)
                     
                     Spacer()
-
+                    
                     // Main Buttons
                     VStack(spacing: 20) {
-
+                        
                         // Scan Prescription Button
                         NavigationLink(destination: ExtractView().navigationBarBackButtonHidden()) {
                             Text("Scan Prescription")
@@ -47,7 +58,7 @@ struct HomeScreen: View {
                                 .foregroundColor(.white)
                         }
                         .glassButton()
-
+                        
                         // View Schedule Button
                         NavigationLink(destination: PrescriptionHistoryView().navigationBarBackButtonHidden())
                         {
@@ -58,7 +69,7 @@ struct HomeScreen: View {
                         .glassButton()
                     }
                     .padding(.horizontal, 24)
-
+                    
                     Spacer()
                 }
             }
