@@ -1,8 +1,3 @@
-//
-//  EditableScheduleConfirmationView.swift
-//  MediSnap
-//
-
 import SwiftUI
 
 struct EditableScheduleConfirmationView: View {
@@ -56,6 +51,7 @@ struct EditableScheduleConfirmationView: View {
                             Button(action: {
                                 Task {
                                     isSaving = true
+                                    // This will now save schedule AND safety information automatically
                                     await vm.saveScheduleToFirestore()
                                     isSaving = false
                                     if vm.errorMessage == nil {
@@ -70,7 +66,7 @@ struct EditableScheduleConfirmationView: View {
                                     } else {
                                         Image(systemName: "checkmark.circle.fill")
                                     }
-                                    Text("Confirm & Save Schedule")
+                                    Text("Save Schedule & Safety Info")
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
@@ -104,7 +100,7 @@ struct EditableScheduleConfirmationView: View {
                         .buttonStyle(.bordered)
                         .disabled(isAddingToCalendar)
                         
-                        // ✅ Add Safety Information Button
+                        // ✅ Updated Safety Information Button
                         Button(action: {
                             vm.showMedicationSafetyInfo()
                         }) {
@@ -140,12 +136,15 @@ struct EditableScheduleConfirmationView: View {
                 }
             }
         }
-        .alert("Schedule Saved!", isPresented: $showSuccessAlert) {
-            Button("OK") {
+        .alert("Schedule & Safety Info Saved!", isPresented: $showSuccessAlert) {
+            Button("View Safety Information") {
+                vm.showSafetyInformation = true
+            }
+            Button("Done") {
                 presentationMode.wrappedValue.dismiss()
             }
         } message: {
-            Text("Your medication schedule has been saved successfully.")
+            Text("Your medication schedule and safety information have been saved successfully.")
         }
         .alert("Added to Calendar!", isPresented: $showCalendarSuccessAlert) {
             Button("View Safety Information") {
@@ -155,8 +154,12 @@ struct EditableScheduleConfirmationView: View {
         } message: {
             Text("Your medication reminders have been added to Google Calendar successfully. Would you like to view important safety information about your medications?")
         }
+        // ✅ Updated sheet to pass prescription ID for cached loading
         .sheet(isPresented: $vm.showSafetyInformation) {
-            MedicationSafetyView(medications: vm.medications)
+            MedicationSafetyView(
+                medications: vm.medications,
+                prescriptionId: vm.currentPrescriptionId
+            )
         }
     }
 }

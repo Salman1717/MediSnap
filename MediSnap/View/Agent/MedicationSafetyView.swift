@@ -1,28 +1,20 @@
-//
-//  MedicationSafetyView.swift
-//  MediSnap
-//
-//  Created by Salman Mhaskar on 21/09/25.
-//
-
-
-//
-//  MedicationSafetyView.swift
-//  MediSnap
-//
-//  Created by Salman Mhaskar on 21/09/25.
-//
-
 import SwiftUI
 
 struct MedicationSafetyView: View {
     let medications: [Medication]
+    let prescriptionId: String? // NEW: Add prescription ID to load cached data
     @Environment(\.presentationMode) var presentationMode
     
     @State private var safetyInfo: SafetyResponse?
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var selectedMedicationIndex = 0
+    
+    // NEW: Initialize with optional prescription ID
+    init(medications: [Medication], prescriptionId: String? = nil) {
+        self.medications = medications
+        self.prescriptionId = prescriptionId
+    }
     
     var body: some View {
         NavigationView {
@@ -65,17 +57,38 @@ struct MedicationSafetyView: View {
         }
     }
     
+    // NEW: Enhanced loading with Firestore cache check
     private func loadSafetyInformation() {
         isLoading = true
         errorMessage = nil
         
         Task {
             do {
-                let safety = try await GeminiService.shared.getSafetyInformation(for: medications)
+                var safety: SafetyResponse?
+                
+                // First, try to load from Firestore cache if prescription ID is available
+                if let presId = prescriptionId {
+                    safety = try await FirebaseService.shared.getSafetyInformation(prescriptionId: presId)
+                }
+                
+                // If not found in cache, generate new safety information
+                if safety == nil {
+                    safety = try await GeminiService.shared.getSafetyInformation(for: medications)
+                    
+                    // Save to cache for future use if prescription ID is available
+                    if let presId = prescriptionId, let safetyResponse = safety {
+                        try? await FirebaseService.shared.saveSafetyInformation(
+                            prescriptionId: presId,
+                            safetyResponse: safetyResponse
+                        )
+                    }
+                }
+                
                 await MainActor.run {
                     self.safetyInfo = safety
                     self.isLoading = false
                 }
+                
             } catch {
                 await MainActor.run {
                     self.errorMessage = error.localizedDescription
@@ -86,24 +99,21 @@ struct MedicationSafetyView: View {
     }
 }
 
+// Rest of the views remain the same...
 struct SafetyContentView: View {
     let safetyResponse: SafetyResponse
     @Binding var selectedIndex: Int
     
     var body: some View {
         VStack(spacing: 0) {
-            // Medical disclaimer banner
             medicalDisclaimerBanner
             
-            // Medication selector (if multiple medications)
             if safetyResponse.medications.count > 1 {
                 medicationPicker
             }
             
-            // Safety information content
             ScrollView {
                 LazyVStack(spacing: 20) {
-                    // Current medication safety info
                     if selectedIndex < safetyResponse.medications.count {
                         let currentMed = safetyResponse.medications[selectedIndex]
                         medicationSafetyContent(for: currentMed)
@@ -180,7 +190,6 @@ struct SafetyContentView: View {
     
     private func medicationSafetyContent(for medication: MedicationSafetyInfo) -> some View {
         VStack(spacing: 20) {
-            // Medication name header with icon
             HStack {
                 Image(systemName: "pill.circle.fill")
                     .foregroundColor(.blue)
@@ -194,12 +203,10 @@ struct SafetyContentView: View {
             }
             .padding(.bottom, 8)
             
-            // Emergency section (if serious side effects exist)
             if !medication.seriousSideEffects.isEmpty || !medication.whenToSeekHelp.isEmpty {
                 EmergencySection(medication: medication)
             }
             
-            // Common side effects
             if !medication.commonSideEffects.isEmpty {
                 SafetySection(
                     title: "Common Side Effects",
@@ -210,7 +217,6 @@ struct SafetyContentView: View {
                 )
             }
             
-            // Precautions
             if !medication.precautions.isEmpty {
                 SafetySection(
                     title: "Important Precautions",
@@ -221,7 +227,6 @@ struct SafetyContentView: View {
                 )
             }
             
-            // Food interactions
             if !medication.foodInteractions.isEmpty {
                 SafetySection(
                     title: "Food & Dietary Guidelines",
@@ -232,7 +237,6 @@ struct SafetyContentView: View {
                 )
             }
             
-            // Drug interactions
             if !medication.drugInteractions.isEmpty {
                 SafetySection(
                     title: "Drug Interactions",
@@ -243,7 +247,6 @@ struct SafetyContentView: View {
                 )
             }
             
-            // Contraindications
             if !medication.contraindications.isEmpty {
                 SafetySection(
                     title: "Do Not Use If You Have:",
@@ -254,7 +257,6 @@ struct SafetyContentView: View {
                 )
             }
             
-            // General advice
             if !medication.generalAdvice.isEmpty {
                 SafetySection(
                     title: "Helpful Tips",
@@ -273,7 +275,6 @@ struct EmergencySection: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Emergency header
             HStack {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(.red)
@@ -287,7 +288,6 @@ struct EmergencySection: View {
                 Spacer()
             }
             
-            // Emergency contact info
             HStack {
                 Text("Call 911 or go to ER immediately if you experience:")
                     .font(.subheadline)
@@ -308,7 +308,6 @@ struct EmergencySection: View {
                 .cornerRadius(8)
             }
             
-            // Serious side effects
             if !medication.seriousSideEffects.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(medication.seriousSideEffects.enumerated()), id: \.offset) { _, item in
@@ -328,7 +327,6 @@ struct EmergencySection: View {
                 }
             }
             
-            // When to seek help
             if !medication.whenToSeekHelp.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(medication.whenToSeekHelp.enumerated()), id: \.offset) { _, item in
@@ -375,7 +373,6 @@ struct SafetySection: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Section header
             HStack {
                 Image(systemName: icon)
                     .foregroundColor(color)
@@ -396,7 +393,6 @@ struct SafetySection: View {
                 Spacer()
             }
             
-            // Section content
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .top, spacing: 10) {
@@ -427,7 +423,6 @@ struct SafetySection: View {
 struct LoadingView: View {
     var body: some View {
         VStack(spacing: 20) {
-            // Animated pills
             HStack(spacing: 8) {
                 ForEach(0..<3) { index in
                     Image(systemName: "pill.fill")
@@ -503,5 +498,5 @@ struct ErrorView: View {
     MedicationSafetyView(medications: [
         Medication(name: "Amoxicillin", dosage: "500mg", frequency: "3 times daily", duration: "10 days", route: "Oral", originalText: "", confidence: 1.0, uncertain: false),
         Medication(name: "Ibuprofen", dosage: "400mg", frequency: "As needed", duration: "5 days", route: "Oral", originalText: "", confidence: 1.0, uncertain: false)
-    ])
+    ], prescriptionId: "sample-prescription-id")
 }

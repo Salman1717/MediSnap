@@ -1,8 +1,3 @@
-//
-//  ExtractViewModel.swift
-//  MediSnap
-//
-
 import FirebaseAuth
 import Combine
 import UIKit
@@ -20,8 +15,9 @@ class ExtractViewModel: ObservableObject {
     
     @Published var showScheduleConfirmation: Bool = false
     @Published var showSafetyInformation: Bool = false
-    var currentPrescriptionId: String?
+    @Published var prescriptionStatus: PrescriptionStatus = .extracted
     
+    var currentPrescriptionId: String?
     
     // MARK: - Process image (OCR + extraction)
     func processImage(_ image: UIImage) async {
@@ -45,7 +41,7 @@ class ExtractViewModel: ObservableObject {
             // 3️⃣ Parse date if available
             if let dateString = dateString {
                 let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd" // adjust if Gemini returns different format
+                formatter.dateFormat = "yyyy-MM-dd"
                 if let date = formatter.date(from: dateString) {
                     prescriptionDate = date
                 }
@@ -58,7 +54,7 @@ class ExtractViewModel: ObservableObject {
         isLoading = false
     }
     
-    // MARK: - Save prescription to Firestore
+    // MARK: - Complete prescription processing workflow
     func savePrescriptionAndGenerateSchedule() async {
         guard !medications.isEmpty else {
             errorMessage = "No medications to save."
@@ -76,15 +72,15 @@ class ExtractViewModel: ObservableObject {
                 _ = try await Auth.auth().signInAnonymously()
             }
             
-            // Save prescription
+            // 1️⃣ Save prescription
             let pres = Prescription(id: UUID().uuidString, date: date, medications: medications)
             try await FirebaseService.shared.savePrescription(pres)
             currentPrescriptionId = pres.id
             
-            // ✅ Generate schedule using Gemini
+            // 2️⃣ Generate schedule using Gemini
             try await GeminiService.shared.generateScheduleWithGemini(prescription: pres)
             
-            // ✅ Clear any previous error messages if successful
+            // Clear any previous error messages if successful
             errorMessage = nil
             
         } catch {
@@ -94,35 +90,54 @@ class ExtractViewModel: ObservableObject {
         isLoading = false
     }
     
-    
+    // MARK: - Save schedule to Firestore
     func saveScheduleToFirestore() async {
         guard let presId = currentPrescriptionId else {
             errorMessage = "No prescription ID available."
             return
         }
         
-        // ✅ Use the schedule from GeminiService
+        isLoading = true
+        
         let validSchedules = GeminiService.shared.medicationSchedule.filter { !$0.reminders.isEmpty }
         
         guard !validSchedules.isEmpty else {
             errorMessage = "No valid schedules to save."
+            isLoading = false
             return
         }
         
         do {
+            // Save schedule
             try await FirebaseService.shared.saveSchedule(
                 prescriptionId: presId,
                 schedule: validSchedules
             )
-            errorMessage = nil // Clear any previous errors
+            
+            // Update status
+            try await FirebaseService.shared.updatePrescriptionStatus(
+                prescriptionId: presId,
+                status: .scheduled
+            )
+            
+            // 🆕 AUTOMATICALLY GENERATE AND SAVE SAFETY INFORMATION
+            try await generateAndSaveSafetyInformation()
+            
+            errorMessage = nil
         } catch {
             errorMessage = "Failed to save schedule: \(error.localizedDescription)"
         }
+        
+        isLoading = false
     }
     
-    
-    // Add schedule to Google Calendar
+    // MARK: - Add schedule to Google Calendar
     func addScheduleToGoogleCalendar() async {
+        guard let presId = currentPrescriptionId else {
+            errorMessage = "No prescription ID available."
+            return
+        }
+        
         let schedule = GeminiService.shared.medicationSchedule
         
         guard !schedule.isEmpty else {
@@ -130,13 +145,26 @@ class ExtractViewModel: ObservableObject {
             return
         }
         
+        isLoading = true
+        
         do {
             let eventIds = try await GoogleCalendarService.shared.addMedicationScheduleToCalendar(schedule: schedule)
             
-            // Optionally save event IDs to Firestore for future reference
-            if let presId = currentPrescriptionId {
-                try await saveCalendarEventIds(prescriptionId: presId, eventIds: eventIds)
-            }
+            // Save event IDs to Firestore
+            let eventMap = Dictionary(uniqueKeysWithValues: eventIds.enumerated().map { (index, id) in
+                ("event_\(index)", [id])
+            })
+            
+            try await FirebaseService.shared.saveScheduleEventIds(
+                prescriptionId: presId,
+                eventMap: eventMap
+            )
+            
+            // Update status
+            try await FirebaseService.shared.updatePrescriptionStatus(
+                prescriptionId: presId,
+                status: .calendarAdded
+            )
             
             errorMessage = nil
             print("Successfully added \(eventIds.count) events to Google Calendar")
@@ -144,6 +172,71 @@ class ExtractViewModel: ObservableObject {
         } catch {
             errorMessage = "Failed to add schedule to Google Calendar: \(error.localizedDescription)"
         }
+        
+        isLoading = false
+    }
+    
+    // 🆕 NEW: Generate and save safety information
+    private func generateAndSaveSafetyInformation() async throws {
+        guard let presId = currentPrescriptionId else {
+            throw NSError(domain: "ExtractViewModel", code: 400, userInfo: [NSLocalizedDescriptionKey: "No prescription ID available"])
+        }
+        
+        guard !medications.isEmpty else {
+            throw NSError(domain: "ExtractViewModel", code: 400, userInfo: [NSLocalizedDescriptionKey: "No medications available for safety analysis"])
+        }
+        
+        // Generate safety information using Gemini
+        let safetyResponse = try await GeminiService.shared.getSafetyInformation(for: medications)
+        
+        // Save to Firestore
+        try await FirebaseService.shared.saveSafetyInformation(
+            prescriptionId: presId,
+            safetyResponse: safetyResponse
+        )
+        
+        // Update status
+        try await FirebaseService.shared.updatePrescriptionStatus(
+            prescriptionId: presId,
+            status: .safetyAnalyzed
+        )
+        
+        print("Safety information generated and saved successfully")
+    }
+    
+    // 🆕 NEW: Complete all processing workflow
+    func completeAllProcessing() async {
+        guard let presId = currentPrescriptionId else {
+            errorMessage = "No prescription ID available."
+            return
+        }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            // 1️⃣ Save schedule if not already saved
+            if prescriptionStatus.rawValue == "extracted" {
+                await saveScheduleToFirestore()
+                if errorMessage != nil { return } // Exit if error occurred
+            }
+            
+            // 2️⃣ Add to calendar if requested
+            // This is optional - you might want to make this based on user preference
+            
+            // 3️⃣ Mark as completed
+            try await FirebaseService.shared.updatePrescriptionStatus(
+                prescriptionId: presId,
+                status: .completed
+            )
+            
+            prescriptionStatus = .completed
+            
+        } catch {
+            errorMessage = "Failed to complete processing: \(error.localizedDescription)"
+        }
+        
+        isLoading = false
     }
     
     // Show safety information manually
@@ -151,11 +244,16 @@ class ExtractViewModel: ObservableObject {
         showSafetyInformation = true
     }
     
-    // Save calendar event IDs to Firestore (optional)
-    private func saveCalendarEventIds(prescriptionId: String, eventIds: [String]) async throws {
-        // You can implement this to save event IDs to Firestore
-        // This allows you to delete events later if needed
-        print("Saving calendar event IDs: \(eventIds)")
+    // 🆕 NEW: Load existing safety information from Firestore
+    func loadSafetyInformation() async -> SafetyResponse? {
+        guard let presId = currentPrescriptionId else { return nil }
+        
+        do {
+            return try await FirebaseService.shared.getSafetyInformation(prescriptionId: presId)
+        } catch {
+            print("Failed to load safety information: \(error.localizedDescription)")
+            return nil
+        }
     }
     
     // Helper parsers
@@ -164,12 +262,10 @@ class ExtractViewModel: ObservableObject {
         if lower.contains("once") { return 1 }
         if lower.contains("twice") { return 2 }
         if lower.contains("thrice") { return 3 }
-        // fallback: 1
         return 1
     }
     
     private func parseDuration(_ text: String) -> Int {
-        // Extract number of days from string like "5 days"
         let components = text.components(separatedBy: CharacterSet.decimalDigits.inverted)
         for comp in components {
             if let num = Int(comp) { return max(num, 1) }

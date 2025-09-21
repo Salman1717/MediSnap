@@ -1,10 +1,3 @@
-//
-//  PrescriptionViewModel.swift
-//  MediSnap
-//
-//  Created by Aaseem Mhaskar on 21/09/25.
-//
-
 import Foundation
 import SwiftUI
 import FirebaseFirestore
@@ -12,32 +5,46 @@ import Combine
 
 @MainActor
 class PrescriptionHistoryViewModel: ObservableObject {
-    @Published var prescriptions: [Prescription] = []
+    @Published var prescriptions: [CompletePrescription] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
-
-    private let db = Firestore.firestore()
-
-    func fetchPrescriptions(for userId: String) async {
+    @Published var selectedPrescription: CompletePrescription?
+    @Published var showDetailView: Bool = false
+    
+    func fetchCompletePrescriptions(for userId: String) async {
         isLoading = true
         errorMessage = nil
         
         do {
-            let snapshot = try await db.collection("prescriptions")
-                .whereField("userId", isEqualTo: userId)
-                .order(by: "date", descending: true)
-                .getDocuments()
-            
-            let fetchedPrescriptions = try snapshot.documents.compactMap { doc -> Prescription? in
-                try doc.data(as: Prescription.self)
-            }
-            
-            self.prescriptions = fetchedPrescriptions
+            let completePrescriptions = try await FirebaseService.shared.getCompletePrescriptions(for: userId)
+            self.prescriptions = completePrescriptions
         } catch {
             self.errorMessage = "Failed to fetch prescriptions: \(error.localizedDescription)"
         }
-
+        
         isLoading = false
     }
+    
+    func selectPrescription(_ prescription: CompletePrescription) {
+        selectedPrescription = prescription
+        showDetailView = true
+    }
+    
+    func refreshPrescription(_ prescriptionId: String) async {
+        do {
+            if let updatedPrescription = try await FirebaseService.shared.getCompletePrescription(prescriptionId: prescriptionId) {
+                // Update the prescription in the array
+                if let index = prescriptions.firstIndex(where: { $0.id == prescriptionId }) {
+                    prescriptions[index] = updatedPrescription
+                }
+                
+                // Update selected prescription if it's the same one
+                if selectedPrescription?.id == prescriptionId {
+                    selectedPrescription = updatedPrescription
+                }
+            }
+        } catch {
+            errorMessage = "Failed to refresh prescription: \(error.localizedDescription)"
+        }
+    }
 }
-
