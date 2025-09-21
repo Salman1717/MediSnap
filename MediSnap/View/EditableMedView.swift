@@ -126,9 +126,14 @@ struct EditableMedicationsView: View {
     
     private var stepProgress: Double {
         switch vm.currentStep {
-        case .idle: return 0.0
-        case .savingPrescription: return 0.5
-        case .generatingSchedule: return 1.0
+        case .idle:
+            return 0.0
+        case .savingPrescription:
+            return 0.5
+        case .generatingSchedule:
+            return 1.0
+        default:
+            return 0.0
         }
     }
     
@@ -325,7 +330,10 @@ struct EditableMedicationsView: View {
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(vm.medications.isEmpty ? Color.gray : gradientBackground)
+                .background(vm.medications.isEmpty ?
+                    AnyView(Color.gray) :
+                    AnyView(gradientBackground)
+                )
                 .foregroundColor(.white)
                 .cornerRadius(16)
                 .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
