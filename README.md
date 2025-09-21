@@ -66,7 +66,14 @@ Imagine Jane, who receives a handwritten prescription:
 
 ---
 
-## 🎥 Demo  
+
+
+## 📽️ Demo Video
+
+[Watch the Demo Video](https://drive.google.com/file/d/1eZlJTUVqHeBYZgrNeLp-Iykx5hcB5m8Y/view?usp=sharing)
+
+## 🎞️ Demo  Screenshots
+
 <img width="1170" height="2532" alt="IMG_9675" src="https://github.com/user-attachments/assets/de0f12a9-b544-46f9-a522-23d9abb27745" />
 
 <img width="1170" height="2532" alt="IMG_9671" src="https://github.com/user-attachments/assets/49de0429-92fa-41d4-9444-5d34c96880be" />
